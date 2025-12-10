@@ -56,6 +56,36 @@ contextBridge.exposeInMainWorld('cluely', {
   },
 
   // ============================================
+  // AUDIO CAPTURE API
+  // For capturing microphone and system audio
+  // ============================================
+  audio: {
+    /**
+     * Send captured audio chunk to main process
+     * Called by useAudioCapture hook when it captures audio
+     * @param {Object} chunk - { source: 'mic'|'system', data: number[], sampleRate, timestamp }
+     */
+    sendAudioChunk: (chunk) => ipcRenderer.send('audio:chunk', chunk),
+
+    /**
+     * Request to start/stop capture from main process
+     * Main process can coordinate capture across the app
+     */
+    startMicCapture: () => ipcRenderer.invoke('audio:start-mic'),
+    stopMicCapture: () => ipcRenderer.invoke('audio:stop-mic'),
+    startSystemCapture: () => ipcRenderer.invoke('audio:start-system'),
+    stopSystemCapture: () => ipcRenderer.invoke('audio:stop-system'),
+    startAllCapture: () => ipcRenderer.invoke('audio:start-all'),
+    stopAllCapture: () => ipcRenderer.invoke('audio:stop-all'),
+
+    /**
+     * Get current audio capture state
+     * Returns: { isMicCapturing, isSystemCapturing, micLevel, systemLevel }
+     */
+    getState: () => ipcRenderer.invoke('audio:get-state'),
+  },
+
+  // ============================================
   // SESSION CONTROL
   // ============================================
   session: {
@@ -115,6 +145,41 @@ contextBridge.exposeInMainWorld('cluely', {
     resetLayout: (callback) => {
       ipcRenderer.on('reset-layout', () => callback());
       return () => ipcRenderer.removeAllListeners('reset-layout');
+    },
+
+    // ============================================
+    // AUDIO CAPTURE EVENTS
+    // Main process can command renderer to start/stop capture
+    // ============================================
+    
+    // Start microphone capture
+    startMicCapture: (callback) => {
+      ipcRenderer.on('audio:start-mic', () => callback());
+      return () => ipcRenderer.removeAllListeners('audio:start-mic');
+    },
+
+    // Stop microphone capture
+    stopMicCapture: (callback) => {
+      ipcRenderer.on('audio:stop-mic', () => callback());
+      return () => ipcRenderer.removeAllListeners('audio:stop-mic');
+    },
+
+    // Start system audio capture
+    startSystemCapture: (callback) => {
+      ipcRenderer.on('audio:start-system', () => callback());
+      return () => ipcRenderer.removeAllListeners('audio:start-system');
+    },
+
+    // Stop system audio capture
+    stopSystemCapture: (callback) => {
+      ipcRenderer.on('audio:stop-system', () => callback());
+      return () => ipcRenderer.removeAllListeners('audio:stop-system');
+    },
+
+    // Receive audio level updates for visualization
+    audioLevel: (callback) => {
+      ipcRenderer.on('audio:level', (event, data) => callback(data));
+      return () => ipcRenderer.removeAllListeners('audio:level');
     },
   },
 });

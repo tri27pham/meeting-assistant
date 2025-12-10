@@ -4,12 +4,17 @@ import { PauseIcon, PlayIcon, WaveformIcon, SettingsIcon } from './Icons';
 function ControlBar({ 
   isPaused, 
   sessionTime, 
+  audioLevel = 0,
+  isCapturing = false,
   onTogglePause, 
   onAskAI, 
   onToggleVisibility,
   onResetLayout,
   onOpenSettings,
 }) {
+  // Scale audio level for visualization (0-1 range, boost low values)
+  const scaledLevel = Math.min(1, audioLevel * 3);
+  
   return (
     <div className="control-bar glass-panel">
       {/* Left group: Play/Pause + Waveform + Timer */}
@@ -17,14 +22,34 @@ function ControlBar({
         <button 
           className="control-btn pause-btn"
           onClick={onTogglePause}
-          aria-label={isPaused ? 'Resume' : 'Pause'}
+          aria-label={isPaused ? 'Start Recording' : 'Pause Recording'}
+          title={isPaused ? 'Start Recording' : 'Pause Recording'}
         >
           {isPaused ? <PlayIcon /> : <PauseIcon />}
         </button>
 
-        <div className={`waveform-indicator ${isPaused ? 'paused' : ''}`}>
+        <div 
+          className={`waveform-indicator ${isPaused ? 'paused' : ''} ${isCapturing ? 'active' : ''}`}
+          style={{
+            // Dynamic glow based on audio level
+            '--audio-level': scaledLevel,
+          }}
+          title={`Audio level: ${(audioLevel * 100).toFixed(0)}%`}
+        >
           <WaveformIcon />
         </div>
+        
+        {/* Debug: Show audio level when capturing */}
+        {isCapturing && (
+          <div className="audio-level-debug" style={{
+            fontSize: '10px',
+            opacity: 0.7,
+            minWidth: '35px',
+            textAlign: 'center',
+          }}>
+            {(audioLevel * 100).toFixed(0)}%
+          </div>
+        )}
 
         <div className="session-time">
           {sessionTime}

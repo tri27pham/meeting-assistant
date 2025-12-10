@@ -5,6 +5,7 @@ import AIResponsePanel from './components/AIResponsePanel';
 import DraggablePanel from './components/DraggablePanel';
 import PermissionSetup from './components/PermissionSetup';
 import SettingsPanel from './components/SettingsPanel';
+import { useAudioCapture } from './hooks/useAudioCapture';
 
 // Panel IDs for localStorage keys
 const PANEL_IDS = ['control-bar', 'live-insights', 'ai-response', 'settings'];
@@ -24,9 +25,26 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
 
   // Session state
-  const [isRunning, setIsRunning] = useState(true);
-  const [isPaused, setIsPaused] = useState(false);
+  const [isRunning, setIsRunning] = useState(false); // Start paused, user must press play
+  const [isPaused, setIsPaused] = useState(true);
   const [sessionTime, setSessionTime] = useState(0);
+
+  // Audio capture hook
+  const {
+    isMicCapturing,
+    isSystemCapturing,
+    isCapturing,
+    micLevel,
+    systemLevel,
+    error: audioError,
+    preAuthorizeMic,
+    startMicCapture,
+    stopMicCapture,
+    startSystemCapture,
+    stopSystemCapture,
+    startAllCapture,
+    stopAllCapture,
+  } = useAudioCapture();
 
   // Layout reset key - incrementing this forces panels to remount
   const [layoutKey, setLayoutKey] = useState(0);
@@ -98,6 +116,13 @@ function App() {
     return () => clearInterval(interval);
   }, [isRunning, isPaused]);
 
+  // Log audio errors
+  useEffect(() => {
+    if (audioError) {
+      console.error('[App] Audio capture error:', audioError);
+    }
+  }, [audioError]);
+
   // Check permissions on mount
   useEffect(() => {
     const checkPermissions = async () => {
@@ -130,10 +155,14 @@ function App() {
   }, []);
 
   // Handler for when permissions are granted
-  const handlePermissionsComplete = useCallback(() => {
+  const handlePermissionsComplete = useCallback(async () => {
+    // Pre-authorize microphone while window is still interactive
+    // This prevents crashes when calling getUserMedia in transparent windows
+    await preAuthorizeMic();
+    
     setPermissionsReady(true);
     setShowPermissionSetup(false);
-  }, []);
+  }, [preAuthorizeMic]);
 
   // Handler for skipping permission setup
   const handlePermissionsSkip = useCallback(() => {
@@ -190,11 +219,35 @@ function App() {
 
   // Handlers
   const handleTogglePause = useCallback(async () => {
-    if (window.cluely) {
-      await window.cluely.session.togglePause();
+    try {
+      if (isPaused) {
+        // Currently paused, start capturing
+        console.log('[App] Starting audio capture...');
+        setIsRunning(true);
+        setIsPaused(false);
+        
+        // Start mic capture (wrapped in try-catch)
+        try {
+          await startMicCapture();
+        } catch (err) {
+          console.error('[App] Failed to start mic capture:', err);
+        }
+      } else {
+        // Currently running, stop capturing
+        console.log('[App] Stopping audio capture...');
+        setIsPaused(true);
+        stopMicCapture();
+        stopSystemCapture();
+      }
+
+      // Also notify backend
+      if (window.cluely?.session?.togglePause) {
+        await window.cluely.session.togglePause();
+      }
+    } catch (err) {
+      console.error('[App] Error in handleTogglePause:', err);
     }
-    setIsPaused((prev) => !prev);
-  }, []);
+  }, [isPaused, startMicCapture, stopMicCapture, stopSystemCapture]);
 
   const handleAskAI = useCallback(async () => {
     if (window.cluely) {
@@ -294,6 +347,8 @@ function App() {
         <ControlBar
           isPaused={isPaused}
           sessionTime={formatTime(sessionTime)}
+          audioLevel={micLevel}
+          isCapturing={isCapturing}
           onTogglePause={handleTogglePause}
           onAskAI={handleAskAI}
           onToggleVisibility={handleToggleVisibility}

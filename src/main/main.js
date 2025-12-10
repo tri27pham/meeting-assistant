@@ -1,14 +1,25 @@
-const { app, BrowserWindow, ipcMain, globalShortcut, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, globalShortcut, screen, session } = require('electron');
 const path = require('path');
 
 // Import our services
 // PermissionManager handles all macOS permission checks and requests
 const permissionManager = require('./services/PermissionManager');
+// AudioCaptureService coordinates audio capture from mic and system
+const audioCaptureService = require('./services/AudioCaptureService');
 
 // Keep a global reference to prevent garbage collection
 let overlayWindow = null;
 
 const isDev = process.env.NODE_ENV !== 'production' || !app.isPackaged;
+
+// Global error handlers to prevent crashes
+process.on('uncaughtException', (error) => {
+  console.error('[Main] Uncaught exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Main] Unhandled rejection:', reason);
+});
 
 function createOverlayWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
@@ -198,6 +209,69 @@ function setupIPC() {
     return { success: true };
   });
 
+  // ============================================
+  // AUDIO CAPTURE HANDLERS
+  // ============================================
+
+  /**
+   * Receive audio chunks from renderer
+   * The renderer captures audio and sends it here for processing
+   */
+  ipcMain.on('audio:chunk', (event, chunk) => {
+    audioCaptureService.processAudioChunk(chunk);
+  });
+
+  /**
+   * Start microphone capture
+   * This tells the renderer to start capturing from the mic
+   */
+  ipcMain.handle('audio:start-mic', async () => {
+    return audioCaptureService.startMicCapture();
+  });
+
+  /**
+   * Stop microphone capture
+   */
+  ipcMain.handle('audio:stop-mic', async () => {
+    return audioCaptureService.stopMicCapture();
+  });
+
+  /**
+   * Start system audio capture
+   * This tells the renderer to start capturing system audio via desktopCapturer
+   */
+  ipcMain.handle('audio:start-system', async () => {
+    return audioCaptureService.startSystemCapture();
+  });
+
+  /**
+   * Stop system audio capture
+   */
+  ipcMain.handle('audio:stop-system', async () => {
+    return audioCaptureService.stopSystemCapture();
+  });
+
+  /**
+   * Start all audio capture (mic + system)
+   */
+  ipcMain.handle('audio:start-all', async () => {
+    return audioCaptureService.startAllCapture();
+  });
+
+  /**
+   * Stop all audio capture
+   */
+  ipcMain.handle('audio:stop-all', async () => {
+    return audioCaptureService.stopAllCapture();
+  });
+
+  /**
+   * Get current audio capture state
+   */
+  ipcMain.handle('audio:get-state', async () => {
+    return audioCaptureService.getState();
+  });
+
   // Window control
   ipcMain.on('window:minimize', () => {
     if (overlayWindow) overlayWindow.hide();
@@ -222,13 +296,48 @@ function setupIPC() {
 }
 
 app.whenReady().then(() => {
+  // Set up permission handlers for media access (getUserMedia)
+  // This is required for microphone access in Electron
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    const allowedPermissions = ['media', 'mediaKeySystem', 'audioCapture', 'desktopCapture'];
+    if (allowedPermissions.includes(permission)) {
+      console.log(`[Main] Allowing permission: ${permission}`);
+      callback(true);
+    } else {
+      console.log(`[Main] Denying permission: ${permission}`);
+      callback(false);
+    }
+  });
+
+  // Also handle permission checks
+  session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
+    const allowedPermissions = ['media', 'mediaKeySystem', 'audioCapture', 'desktopCapture'];
+    return allowedPermissions.includes(permission);
+  });
+
+  // Handle device permission requests (for specific microphone/camera access)
+  session.defaultSession.setDevicePermissionHandler((details) => {
+    // Allow all audio input devices
+    if (details.deviceType === 'hid' || details.deviceType === 'serial') {
+      return false;
+    }
+    console.log(`[Main] Allowing device access: ${details.deviceType}`);
+    return true;
+  });
+
   createOverlayWindow();
   registerHotkeys();
   setupIPC();
 
+  // Set window reference for audio capture service
+  // This allows it to send IPC messages to the renderer
+  audioCaptureService.setOverlayWindow(overlayWindow);
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createOverlayWindow();
+      // Update the window reference
+      audioCaptureService.setOverlayWindow(overlayWindow);
     }
   });
 });

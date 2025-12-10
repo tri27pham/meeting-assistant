@@ -458,10 +458,16 @@ html, body, #root {
   display: flex;
   align-items: center;
   padding: 0 var(--space-xs);
+  transition: filter 0.1s ease;
 }
 
 .waveform-indicator.paused {
   color: var(--text-tertiary);
+}
+
+/* Active audio capture - glow based on audio level */
+.waveform-indicator.active {
+  filter: drop-shadow(0 0 calc(var(--audio-level, 0) * 8px) var(--accent-green));
 }
 
 /* Session timer */
