@@ -1,6 +1,10 @@
 const { app, BrowserWindow, ipcMain, globalShortcut, screen } = require('electron');
 const path = require('path');
 
+// Import our services
+// PermissionManager handles all macOS permission checks and requests
+const permissionManager = require('./services/PermissionManager');
+
 // Keep a global reference to prevent garbage collection
 let overlayWindow = null;
 
@@ -98,8 +102,75 @@ function registerHotkeys() {
 
 // IPC Handlers
 function setupIPC() {
-  // Session control
+  // ============================================
+  // PERMISSION HANDLERS
+  // These allow the UI to check and request permissions
+  // ============================================
+
+  /**
+   * Get current permission state
+   * UI calls this to show which permissions are missing
+   */
+  ipcMain.handle('permissions:get-state', async () => {
+    return permissionManager.getPermissionState();
+  });
+
+  /**
+   * Request all requestable permissions
+   * This will trigger system dialogs for microphone and accessibility
+   * Screen recording must be done manually via System Preferences
+   */
+  ipcMain.handle('permissions:request', async () => {
+    return permissionManager.requestPermissions();
+  });
+
+  /**
+   * Open System Preferences to a specific permission section
+   * Used when user needs to manually grant permissions
+   */
+  ipcMain.handle('permissions:open-preferences', async (event, type) => {
+    switch (type) {
+      case 'microphone':
+        permissionManager.openMicrophonePreferences();
+        break;
+      case 'screen-recording':
+        permissionManager.openScreenRecordingPreferences();
+        break;
+      case 'accessibility':
+        permissionManager.openAccessibilityPreferences();
+        break;
+      default:
+        console.warn('[Main] Unknown preference type:', type);
+    }
+    return { success: true };
+  });
+
+  /**
+   * Check if all permissions are granted and we're ready to start
+   */
+  ipcMain.handle('permissions:is-ready', async () => {
+    return {
+      ready: permissionManager.isReady(),
+      missing: permissionManager.getMissingPermissions(),
+    };
+  });
+
+  // ============================================
+  // SESSION CONTROL HANDLERS
+  // ============================================
+
   ipcMain.handle('session:start', async () => {
+    // First check if we have all permissions
+    if (!permissionManager.isReady()) {
+      const missing = permissionManager.getMissingPermissions();
+      console.log('[Main] Cannot start session - missing permissions:', missing);
+      return { 
+        success: false, 
+        error: 'Missing permissions',
+        missingPermissions: missing,
+      };
+    }
+
     // TODO: Integrate with Session Manager service
     console.log('[Main] Session start requested');
     return { success: true };
@@ -117,7 +188,10 @@ function setupIPC() {
     return { success: true, paused: false };
   });
 
-  // AI actions
+  // ============================================
+  // AI ACTION HANDLERS
+  // ============================================
+
   ipcMain.handle('ai:trigger-action', async (event, actionType, metadata) => {
     // TODO: Integrate with AI Orchestration service
     console.log('[Main] AI action triggered:', actionType, metadata);
