@@ -3,9 +3,11 @@ import ControlBar from './components/ControlBar';
 import LiveInsightsPanel from './components/LiveInsightsPanel';
 import AIResponsePanel from './components/AIResponsePanel';
 import DraggablePanel from './components/DraggablePanel';
+import PermissionSetup from './components/PermissionSetup';
+import SettingsPanel from './components/SettingsPanel';
 
 // Panel IDs for localStorage keys
-const PANEL_IDS = ['control-bar', 'live-insights', 'ai-response'];
+const PANEL_IDS = ['control-bar', 'live-insights', 'ai-response', 'settings'];
 
 // Default panel sizes
 const PANEL_SIZES = {
@@ -14,6 +16,13 @@ const PANEL_SIZES = {
 };
 
 function App() {
+  // Permission state - determines if we show setup or main UI
+  const [permissionsReady, setPermissionsReady] = useState(null); // null = loading, false = show setup, true = ready
+  const [showPermissionSetup, setShowPermissionSetup] = useState(false);
+
+  // Settings panel state
+  const [showSettings, setShowSettings] = useState(false);
+
   // Session state
   const [isRunning, setIsRunning] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
@@ -88,6 +97,59 @@ function App() {
     }
     return () => clearInterval(interval);
   }, [isRunning, isPaused]);
+
+  // Check permissions on mount
+  useEffect(() => {
+    const checkPermissions = async () => {
+      if (!window.cluely?.permissions) {
+        // API not available - assume ready (for development/testing)
+        console.log('[App] Permissions API not available, skipping check');
+        setPermissionsReady(true);
+        return;
+      }
+
+      try {
+        const { ready, missing } = await window.cluely.permissions.isReady();
+        console.log('[App] Permission check:', { ready, missing });
+        
+        if (ready) {
+          setPermissionsReady(true);
+          setShowPermissionSetup(false);
+        } else {
+          setPermissionsReady(false);
+          setShowPermissionSetup(true);
+        }
+      } catch (error) {
+        console.error('[App] Failed to check permissions:', error);
+        // On error, assume ready to not block the user
+        setPermissionsReady(true);
+      }
+    };
+
+    checkPermissions();
+  }, []);
+
+  // Handler for when permissions are granted
+  const handlePermissionsComplete = useCallback(() => {
+    setPermissionsReady(true);
+    setShowPermissionSetup(false);
+  }, []);
+
+  // Handler for skipping permission setup
+  const handlePermissionsSkip = useCallback(() => {
+    setShowPermissionSetup(false);
+    // Note: App may have limited functionality
+  }, []);
+
+  // Settings handlers
+  // Toggle settings panel (clicking icon when open will close it)
+  const handleToggleSettings = useCallback(() => {
+    setShowSettings(prev => !prev);
+  }, []);
+
+  const handleCloseSettings = useCallback(() => {
+    setShowSettings(false);
+  }, []);
 
   // Backend event listeners
   useEffect(() => {
@@ -186,6 +248,38 @@ function App() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Show permission setup if permissions are missing
+  if (showPermissionSetup) {
+    return (
+      <div className="overlay-container">
+        <DraggablePanel
+          panelId="permission-setup"
+          initialPosition={{ x: 0, y: 0 }}
+          resizable={false}
+          centered={true}
+          className="permission-setup-panel"
+        >
+          <PermissionSetup 
+            onComplete={handlePermissionsComplete}
+            onSkip={handlePermissionsSkip}
+          />
+        </DraggablePanel>
+      </div>
+    );
+  }
+
+  // Show loading state while checking permissions
+  if (permissionsReady === null) {
+    return (
+      <div className="overlay-container">
+        <div className="permission-setup glass-panel" style={{ textAlign: 'center', padding: '40px' }}>
+          <p style={{ color: 'var(--text-secondary)' }}>Checking permissions...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Main app UI
   return (
     <div className="overlay-container">
       {/* Control Bar - centered at top, draggable but not resizable */}
@@ -204,6 +298,7 @@ function App() {
           onAskAI={handleAskAI}
           onToggleVisibility={handleToggleVisibility}
           onResetLayout={handleResetLayout}
+          onOpenSettings={handleToggleSettings}
         />
       </DraggablePanel>
       
@@ -245,6 +340,22 @@ function App() {
             onCopy={handleCopyResponse}
             onClose={handleCloseResponse}
           />
+        </DraggablePanel>
+      )}
+      
+      {/* Settings Panel - bottom left, below live insights */}
+      {showSettings && (
+        <DraggablePanel
+          panelId="settings"
+          initialPosition={{ 
+            x: 32 - 16, // Same as live insights: margin - containerPadding
+            y: window.innerHeight - 380 - 48 // Bottom with margin, fits ~380px panel
+          }}
+          resizable={false}
+          centered={false}
+          className="settings-panel-wrapper"
+        >
+          <SettingsPanel onClose={handleCloseSettings} />
         </DraggablePanel>
       )}
       

@@ -2,10 +2,62 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 /**
  * Preload script - Exposes a safe API to the renderer process
- * Following architecture: UI must not know how audio/STT/LLM works
+ * 
+ * SECURITY MODEL:
+ * - contextBridge.exposeInMainWorld creates a safe bridge between
+ *   the renderer (UI) and main (backend) processes
+ * - The UI can only call the methods we explicitly expose here
+ * - This prevents the UI from accessing Node.js APIs directly
+ * 
+ * ARCHITECTURE:
+ * - Following cursor.md: UI must not know how audio/STT/LLM works
+ * - All heavy logic stays in the main process
+ * - UI just sends commands and receives data
  */
 contextBridge.exposeInMainWorld('cluely', {
-  // Session control
+  // ============================================
+  // PERMISSIONS API
+  // Allows UI to check and request macOS permissions
+  // ============================================
+  permissions: {
+    /**
+     * Get current permission state
+     * Returns: { microphone, screenRecording, accessibility, allGranted }
+     * 
+     * Status values for microphone/screenRecording:
+     * - 'granted': Permission allowed
+     * - 'denied': User explicitly denied
+     * - 'not-determined': User hasn't been asked yet
+     * - 'restricted': System policy prevents access
+     * 
+     * accessibility is just true/false
+     */
+    getState: () => ipcRenderer.invoke('permissions:get-state'),
+
+    /**
+     * Request all requestable permissions
+     * Shows system dialogs for microphone and accessibility
+     * Screen recording cannot be requested programmatically
+     */
+    request: () => ipcRenderer.invoke('permissions:request'),
+
+    /**
+     * Open System Preferences to a specific section
+     * Use when user needs to manually grant permissions
+     * @param {'microphone' | 'screen-recording' | 'accessibility'} type
+     */
+    openPreferences: (type) => ipcRenderer.invoke('permissions:open-preferences', type),
+
+    /**
+     * Quick check if all permissions are granted
+     * Returns: { ready: boolean, missing: string[] }
+     */
+    isReady: () => ipcRenderer.invoke('permissions:is-ready'),
+  },
+
+  // ============================================
+  // SESSION CONTROL
+  // ============================================
   session: {
     start: () => ipcRenderer.invoke('session:start'),
     stop: () => ipcRenderer.invoke('session:stop'),

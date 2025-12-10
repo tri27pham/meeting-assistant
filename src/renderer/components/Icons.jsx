@@ -351,3 +351,26 @@ export function ResetIcon({ className = '' }) {
     </svg>
   );
 }
+
+export function SettingsIcon({ className = '' }) {
+  return (
+    <svg 
+      className={className} 
+      width="16" 
+      height="16" 
+      viewBox="0 0 16 16" 
+      fill="none" 
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      {/* Gear shape */}
+      <path 
+        d="M6.86 1h2.28l.32 1.9a5.02 5.02 0 011.32.77l1.82-.73.98 1.7-1.5 1.18c.1.39.14.79.14 1.18s-.04.8-.14 1.18l1.5 1.18-.98 1.7-1.82-.73c-.4.32-.84.58-1.32.77L9.14 15H6.86l-.32-1.9a5.02 5.02 0 01-1.32-.77l-1.82.73-.98-1.7 1.5-1.18A5.1 5.1 0 013.78 9c0-.4.04-.8.14-1.18l-1.5-1.18.98-1.7 1.82.73c.4-.32.84-.58 1.32-.77L6.86 1z" 
+        stroke="currentColor" 
+        strokeWidth="1.3" 
+        strokeLinejoin="round"
+      />
+      {/* Center circle */}
+      <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.3"/>
+    </svg>
+  );
+}
