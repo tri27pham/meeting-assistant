@@ -127,18 +127,6 @@ function App() {
   });
 
   const [legacyTranscript, setLegacyTranscript] = useState([]);
-  
-  // Combine STT transcriptions with legacy transcript
-  const transcript = useMemo(() => {
-    // Convert STT transcriptions to transcript format
-    const sttItems = transcriptions.map((t, i) => ({
-      id: `stt-${i}`,
-      text: t.text,
-      timestamp: t.timestamp,
-      speaker: 'You', // Mic captures your voice
-    }));
-    return [...sttItems, ...legacyTranscript];
-  }, [transcriptions, legacyTranscript]);
 
   // Timer effect
   useEffect(() => {
@@ -243,12 +231,17 @@ function App() {
       handleResetLayout();
     });
 
+    const unsubToggleTranscript = window.cluely.on?.toggleTranscript?.(() => {
+      setShowTranscript(prev => !prev);
+    });
+
     return () => {
       unsubTranscript?.();
       unsubSuggestion?.();
       unsubInsights?.();
       unsubTrigger?.();
       unsubResetLayout?.();
+      unsubToggleTranscript?.();
     };
   }, []);
 
@@ -390,9 +383,11 @@ function App() {
           sessionTime={formatTime(sessionTime)}
           audioLevel={micLevel}
           isCapturing={isCapturing}
+          showTranscript={showTranscript}
           onTogglePause={handleTogglePause}
           onAskAI={handleAskAI}
           onToggleVisibility={handleToggleVisibility}
+          onToggleTranscript={() => setShowTranscript(!showTranscript)}
           onResetLayout={handleResetLayout}
           onOpenSettings={handleToggleSettings}
         />
@@ -412,11 +407,8 @@ function App() {
           insights={insights}
           actions={actions}
           selectedAction={selectedAction}
-          showTranscript={showTranscript}
           showAudioMeter={showAudioMeter && isCapturing}
           audioLevels={{ dB: micDB, peak: micPeak, rms: micLevel }}
-          transcript={transcript}
-          onToggleTranscript={() => setShowTranscript(!showTranscript)}
           onToggleAudioMeter={() => setShowAudioMeter(!showAudioMeter)}
           onActionSelect={handleActionSelect}
           onCopyInsights={handleCopyInsights}
@@ -424,21 +416,23 @@ function App() {
       </DraggablePanel>
 
       {/* Live Transcription Panel - Below live insights */}
-      <DraggablePanel
-        key={`transcription-${layoutKey}`}
-        panelId="transcription"
-        initialPosition={defaultPositions.transcription}
-        initialSize={PANEL_SIZES.transcription}
-        minSize={{ width: 300, height: 200 }}
-        maxSize={{ width: 500, height: 600 }}
-        resizable={true}
-      >
-        <TranscriptionPanel
-          transcriptions={transcriptions}
-          isRecording={isCapturing && !isPaused}
-          onClear={clearSTT}
-        />
-      </DraggablePanel>
+      {showTranscript && (
+        <DraggablePanel
+          key={`transcription-${layoutKey}`}
+          panelId="transcription"
+          initialPosition={defaultPositions.transcription}
+          initialSize={PANEL_SIZES.transcription}
+          minSize={{ width: 300, height: 200 }}
+          maxSize={{ width: 500, height: 600 }}
+          resizable={true}
+        >
+          <TranscriptionPanel
+            transcriptions={transcriptions}
+            isRecording={isCapturing && !isPaused}
+            onClear={clearSTT}
+          />
+        </DraggablePanel>
+      )}
 
       {/* AI Response Panel - 1/4 down from top, right aligned */}
       {aiResponse && (
@@ -477,7 +471,7 @@ function App() {
       
       {/* Keyboard shortcuts hint */}
       <div className="shortcuts-hint">
-        <kbd>⌘</kbd><kbd>/</kbd> show/hide · <kbd>⌘</kbd><kbd>\</kbd> reset layout
+        <kbd>⌘</kbd><kbd>/</kbd> show/hide · <kbd>⌘</kbd><kbd>'</kbd> transcript · <kbd>⌘</kbd><kbd>\</kbd> reset
       </div>
     </div>
   );

@@ -437,6 +437,20 @@ html, body, #root {
   transform: scale(0.97);
 }
 
+.control-btn.active {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--accent-blue);
+}
+
+.control-btn.transcript-btn {
+  padding: var(--space-sm);
+}
+
+.control-btn.transcript-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
 /* Circular pause/play button */
 .pause-btn {
   width: 32px;

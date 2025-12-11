@@ -1,92 +1,61 @@
 /**
  * useSTT.js
  * 
- * React hook for managing Speech-to-Text functionality.
- * Supports both local Whisper (Transformers.js) and OpenAI API.
+ * React hook for managing Speech-to-Text functionality with Deepgram.
+ * Supports real-time streaming transcription.
  */
 
 import { useState, useEffect, useCallback } from 'react';
 
 export function useSTT() {
-  const [mode, setModeState] = useState('local'); // 'local' or 'api'
+  // Connection state
   const [isEnabled, setIsEnabled] = useState(false);
-  const [isReady, setIsReady] = useState(true); // Local mode is always ready
-  const [isModelLoaded, setIsModelLoaded] = useState(false);
-  const [isLoadingModel, setIsLoadingModel] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+  
+  // Transcription state
   const [transcriptions, setTranscriptions] = useState([]);
-  const [currentTranscript, setCurrentTranscript] = useState('');
+  const [interimText, setInterimText] = useState('');
   const [error, setError] = useState(null);
 
-  // Check STT state
-  const checkReady = useCallback(async () => {
-    if (!window.cluely?.stt) return;
-    
-    try {
-      const state = await window.cluely.stt.getState();
-      setModeState(state.mode);
-      setIsReady(state.isReady);
-      setIsEnabled(state.isEnabled);
-      setIsModelLoaded(state.isModelLoaded);
-      setIsLoadingModel(state.isLoadingModel);
-    } catch (err) {
-      console.error('[useSTT] Failed to check state:', err);
-    }
-  }, []);
-
-  // Set mode
-  const setMode = useCallback(async (newMode) => {
-    if (!window.cluely?.stt) return false;
-    
-    try {
-      await window.cluely.stt.setMode(newMode);
-      setModeState(newMode);
-      // Local mode is always ready
-      setIsReady(newMode === 'local' ? true : false);
-      return true;
-    } catch (err) {
-      console.error('[useSTT] Failed to set mode:', err);
-      setError(err.message);
-      return false;
-    }
-  }, []);
-
-  // Set API key (for API mode)
+  // Set API key
   const setApiKey = useCallback(async (apiKey) => {
     if (!window.cluely?.stt) return false;
     
     try {
       await window.cluely.stt.setApiKey(apiKey);
-      if (mode === 'api') {
-        setIsReady(true);
-      }
+      setIsReady(true);
+      setError(null);
       return true;
     } catch (err) {
       console.error('[useSTT] Failed to set API key:', err);
       setError(err.message);
       return false;
     }
-  }, [mode]);
+  }, []);
 
-  // Enable STT
+  // Enable STT (connect to Deepgram)
   const enable = useCallback(async () => {
     if (!window.cluely?.stt) return;
     
     try {
       await window.cluely.stt.setEnabled(true);
       setIsEnabled(true);
+      setError(null);
     } catch (err) {
       console.error('[useSTT] Failed to enable:', err);
       setError(err.message);
     }
   }, []);
 
-  // Disable STT
+  // Disable STT (disconnect)
   const disable = useCallback(async () => {
     if (!window.cluely?.stt) return;
     
     try {
       await window.cluely.stt.setEnabled(false);
       setIsEnabled(false);
+      setInterimText('');
     } catch (err) {
       console.error('[useSTT] Failed to disable:', err);
     }
@@ -99,84 +68,95 @@ export function useSTT() {
     try {
       await window.cluely.stt.clear();
       setTranscriptions([]);
-      setCurrentTranscript('');
+      setInterimText('');
     } catch (err) {
       console.error('[useSTT] Failed to clear:', err);
     }
   }, []);
 
-  // Load existing transcriptions
-  const loadTranscriptions = useCallback(async () => {
+  // Get full transcript as string
+  const getFullTranscript = useCallback(() => {
+    const final = transcriptions.map(t => t.text).join(' ');
+    return interimText ? `${final} ${interimText}`.trim() : final;
+  }, [transcriptions, interimText]);
+
+  // Check initial state
+  const checkReady = useCallback(async () => {
     if (!window.cluely?.stt) return;
     
     try {
-      const results = await window.cluely.stt.getTranscriptions();
-      setTranscriptions(results);
-      setCurrentTranscript(results.map(t => t.text).join(' '));
+      const state = await window.cluely.stt.getState();
+      setIsReady(state.hasApiKey);
+      setIsEnabled(state.isEnabled);
+      setIsConnected(state.isConnected);
     } catch (err) {
-      console.error('[useSTT] Failed to load transcriptions:', err);
+      console.error('[useSTT] Failed to check state:', err);
     }
   }, []);
 
   // Set up event listeners
   useEffect(() => {
     if (!window.cluely?.on) {
-      console.log('[useSTT] window.cluely.on not available yet');
       return;
     }
-    
-    console.log('[useSTT] Setting up event listeners');
 
-    // Listen for new transcriptions
+    // Final transcription
     const unsubTranscription = window.cluely.on.sttTranscription?.((result) => {
-      console.log('[useSTT] Received transcription:', result);
-      setTranscriptions(prev => {
-        const newTranscriptions = [...prev, result];
-        console.log('[useSTT] Updated transcriptions count:', newTranscriptions.length);
-        return newTranscriptions;
-      });
-      setCurrentTranscript(prev => prev ? `${prev} ${result.text}` : result.text);
+      console.log('[useSTT] Final:', result.text);
+      setTranscriptions(prev => [...prev, result]);
+      setInterimText(''); // Clear interim when final arrives
     });
 
-    // Listen for errors
+    // Interim (partial) transcription
+    const unsubInterim = window.cluely.on.sttInterim?.((result) => {
+      setInterimText(result.text);
+    });
+
+    // Connection status
+    const unsubConnected = window.cluely.on.sttConnected?.(() => {
+      console.log('[useSTT] Connected');
+      setIsConnected(true);
+      setError(null);
+    });
+
+    const unsubDisconnected = window.cluely.on.sttDisconnected?.((info) => {
+      console.log('[useSTT] Disconnected:', info);
+      setIsConnected(false);
+    });
+
+    // Errors
     const unsubError = window.cluely.on.sttError?.((err) => {
       console.error('[useSTT] Error:', err);
       setError(err.message);
-    });
-
-    console.log('[useSTT] Listeners set up:', { 
-      hasTranscription: !!unsubTranscription, 
-      hasError: !!unsubError 
     });
 
     // Check initial state
     checkReady();
 
     return () => {
-      console.log('[useSTT] Cleaning up listeners');
       unsubTranscription?.();
+      unsubInterim?.();
+      unsubConnected?.();
+      unsubDisconnected?.();
       unsubError?.();
     };
   }, [checkReady]);
 
   return {
     // State
-    mode,
     isEnabled,
+    isConnected,
     isReady,
-    isModelLoaded,
-    isLoadingModel,
     transcriptions,
-    currentTranscript,
+    interimText,
+    currentTranscript: getFullTranscript(),
     error,
     
     // Actions
-    setMode,
     setApiKey,
     enable,
     disable,
     clear,
-    loadTranscriptions,
     checkReady,
   };
 }
