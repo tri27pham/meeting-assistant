@@ -1,14 +1,10 @@
 import React from 'react';
-import { SparkleIcon, CopyIcon, BookIcon, GlobeIcon, ChatIcon, MeterIcon } from './Icons';
-import AudioMeter from './AudioMeter';
+import { SparkleIcon, CopyIcon, BookIcon, GlobeIcon, ChatIcon } from './Icons';
 
 function LiveInsightsPanel({ 
   insights, 
   actions, 
   selectedAction, 
-  showAudioMeter = false,
-  audioLevels = { dB: -60, peak: -60, rms: 0 },
-  onToggleAudioMeter,
   onActionSelect,
   onCopyInsights
 }) {
@@ -37,14 +33,6 @@ function LiveInsightsPanel({
         </div>
         <div className="panel-actions">
           <button 
-            className={`header-btn icon-only ${showAudioMeter ? 'active' : ''}`}
-            onClick={onToggleAudioMeter}
-            aria-pressed={showAudioMeter}
-            title={showAudioMeter ? 'Hide audio meter' : 'Show audio meter'}
-          >
-            <MeterIcon />
-          </button>
-          <button 
             className="header-btn icon-only" 
             onClick={handleCopy}
             aria-label="Copy insights"
@@ -53,17 +41,6 @@ function LiveInsightsPanel({
           </button>
         </div>
       </div>
-
-      {showAudioMeter && (
-        <div className="audio-meter-section">
-          <AudioMeter 
-            source="mic" 
-            dB={audioLevels.dB}
-            peak={audioLevels.peak}
-            rms={audioLevels.rms}
-          />
-        </div>
-      )}
 
       <div className="insights-content">
         <h3 className="insights-title">{insights.title}</h3>

@@ -1,17 +1,14 @@
 import React from 'react';
-import { PauseIcon, PlayIcon, WaveformIcon, SettingsIcon, TranscriptIcon } from './Icons';
+import { PauseIcon, PlayIcon, WaveformIcon, SettingsIcon } from './Icons';
 
 function ControlBar({ 
   isPaused, 
   sessionTime, 
   audioLevel = 0,
   isCapturing = false,
-  showTranscript = false,
   onTogglePause, 
   onAskAI, 
   onToggleVisibility,
-  onToggleTranscript,
-  onResetLayout,
   onOpenSettings,
 }) {
   // Scale audio level for visualization (0-1 range, boost low values)
@@ -69,37 +66,11 @@ function ControlBar({
 
       <div className="control-divider" />
 
-      {/* Transcript toggle */}
-      <button 
-        className={`control-btn transcript-btn ${showTranscript ? 'active' : ''}`} 
-        onClick={onToggleTranscript}
-        title={showTranscript ? 'Hide Transcript' : 'Show Transcript'}
-      >
-        <TranscriptIcon />
-        <kbd className="shortcut">⌘</kbd>
-        <kbd className="shortcut">'</kbd>
-      </button>
-
-      <div className="control-divider" />
-
       {/* Show/Hide */}
       <button className="control-btn visibility-btn" onClick={onToggleVisibility}>
         <span>Show/Hide</span>
         <kbd className="shortcut">⌘</kbd>
         <kbd className="shortcut">/</kbd>
-      </button>
-
-      <div className="control-divider" />
-
-      {/* Reset Layout */}
-      <button 
-        className="control-btn reset-btn" 
-        onClick={onResetLayout}
-        title="Reset panel positions and sizes"
-      >
-        <span>Reset</span>
-        <kbd className="shortcut">⌘</kbd>
-        <kbd className="shortcut">\</kbd>
       </button>
 
       <div className="control-divider" />
@@ -111,6 +82,7 @@ function ControlBar({
         title="Settings"
       >
         <SettingsIcon />
+        <span>Settings</span>
       </button>
     </div>
   );

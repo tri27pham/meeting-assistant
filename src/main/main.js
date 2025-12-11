@@ -84,7 +84,7 @@ function registerHotkeys() {
     }
   });
 
-  globalShortcut.register("CommandOrControl+'", () => {
+  globalShortcut.register("CommandOrControl+;", () => {
     if (overlayWindow) {
       overlayWindow.webContents.send('toggle-transcript');
     }

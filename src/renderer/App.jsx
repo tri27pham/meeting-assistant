@@ -3,6 +3,7 @@ import ControlBar from './components/ControlBar';
 import LiveInsightsPanel from './components/LiveInsightsPanel';
 import AIResponsePanel from './components/AIResponsePanel';
 import TranscriptionPanel from './components/TranscriptionPanel';
+import AudioMeterPanel from './components/AudioMeterPanel';
 import DraggablePanel from './components/DraggablePanel';
 import PermissionSetup from './components/PermissionSetup';
 import SettingsPanel from './components/SettingsPanel';
@@ -10,7 +11,7 @@ import { useAudioCapture } from './hooks/useAudioCapture';
 import { useSTT } from './hooks/useSTT';
 
 // Panel IDs for localStorage keys
-const PANEL_IDS = ['control-bar', 'live-insights', 'ai-response', 'transcription', 'settings'];
+const PANEL_IDS = ['control-bar', 'live-insights', 'ai-response', 'transcription', 'settings', 'audio-meter'];
 
 // Default panel sizes
 const PANEL_SIZES = {
@@ -37,6 +38,8 @@ function App() {
     isMicCapturing,
     isSystemCapturing,
     isCapturing,
+    isMeterOnly,
+    isMeterActive,
     micLevel,
     systemLevel,
     micDB,
@@ -45,6 +48,8 @@ function App() {
     preAuthorizeMic,
     startMicCapture,
     stopMicCapture,
+    startMeterOnly,
+    stopMeterOnly,
     startSystemCapture,
     stopSystemCapture,
     startAllCapture,
@@ -101,6 +106,14 @@ function App() {
         x: margin - containerPadding,
         y: topOffset + PANEL_SIZES.liveInsights.height + 16 // Below live insights
       },
+      settings: {
+        x: screenWidth - PANEL_SIZES.aiResponse.width - margin - containerPadding,
+        y: topOffset + PANEL_SIZES.aiResponse.height + 16 // Below AI response
+      },
+      audioMeter: {
+        x: margin - containerPadding + 15, // Slightly right of live insights alignment
+        y: 25 // Higher up
+      },
     };
   }, [layoutKey]); // Recalculate when layout resets
   
@@ -145,6 +158,17 @@ function App() {
       console.error('[App] Audio capture error:', audioError);
     }
   }, [audioError]);
+
+  // Manage meter-only mode based on showAudioMeter state
+  useEffect(() => {
+    if (showAudioMeter && !isCapturing && !isMeterOnly) {
+      // Audio meter shown but not recording - start meter-only mode
+      startMeterOnly();
+    } else if (!showAudioMeter && isMeterOnly) {
+      // Audio meter hidden and in meter-only mode - stop it
+      stopMeterOnly();
+    }
+  }, [showAudioMeter, isCapturing, isMeterOnly, startMeterOnly, stopMeterOnly]);
 
   // Check permissions on mount
   useEffect(() => {
@@ -251,6 +275,12 @@ function App() {
       if (isPaused) {
         // Currently paused, start capturing
         console.log('[App] Starting audio capture...');
+        
+        // Stop meter-only mode if active (full capture will take over)
+        if (isMeterOnly) {
+          stopMeterOnly();
+        }
+        
         setIsRunning(true);
         setIsPaused(false);
 
@@ -272,6 +302,11 @@ function App() {
         
         // Disable STT
         await disableSTT();
+        
+        // Restart meter-only mode if audio meter is shown
+        if (showAudioMeter) {
+          startMeterOnly();
+        }
       }
 
       // Also notify backend
@@ -281,7 +316,7 @@ function App() {
     } catch (err) {
       console.error('[App] Error in handleTogglePause:', err);
     }
-  }, [isPaused, startMicCapture, stopMicCapture, stopSystemCapture, enableSTT, disableSTT]);
+  }, [isPaused, isMeterOnly, showAudioMeter, startMicCapture, stopMicCapture, stopMeterOnly, startMeterOnly, stopSystemCapture, enableSTT, disableSTT]);
 
   const handleAskAI = useCallback(async () => {
     if (window.cluely) {
@@ -383,12 +418,9 @@ function App() {
           sessionTime={formatTime(sessionTime)}
           audioLevel={micLevel}
           isCapturing={isCapturing}
-          showTranscript={showTranscript}
           onTogglePause={handleTogglePause}
           onAskAI={handleAskAI}
           onToggleVisibility={handleToggleVisibility}
-          onToggleTranscript={() => setShowTranscript(!showTranscript)}
-          onResetLayout={handleResetLayout}
           onOpenSettings={handleToggleSettings}
         />
       </DraggablePanel>
@@ -407,9 +439,6 @@ function App() {
           insights={insights}
           actions={actions}
           selectedAction={selectedAction}
-          showAudioMeter={showAudioMeter && isCapturing}
-          audioLevels={{ dB: micDB, peak: micPeak, rms: micLevel }}
-          onToggleAudioMeter={() => setShowAudioMeter(!showAudioMeter)}
           onActionSelect={handleActionSelect}
           onCopyInsights={handleCopyInsights}
         />
@@ -453,25 +482,45 @@ function App() {
         </DraggablePanel>
       )}
       
-      {/* Settings Panel - bottom left, below live insights */}
+      {/* Audio Meter Panel - above live insights */}
+      {showAudioMeter && (
+        <DraggablePanel
+          key={`audio-meter-${layoutKey}`}
+          panelId="audio-meter"
+          initialPosition={defaultPositions.audioMeter}
+          resizable={false}
+          centered={false}
+          className="audio-meter-panel-wrapper"
+        >
+          <AudioMeterPanel
+            dB={micDB}
+            peak={micPeak}
+            rms={micLevel}
+          />
+        </DraggablePanel>
+      )}
+
+      {/* Settings Panel - below AI Response panel */}
       {showSettings && (
         <DraggablePanel
+          key={`settings-${layoutKey}`}
           panelId="settings"
-          initialPosition={{ 
-            x: 32 - 16, // Same as live insights: margin - containerPadding
-            y: window.innerHeight - 380 - 48 // Bottom with margin, fits ~380px panel
-          }}
+          initialPosition={defaultPositions.settings}
           resizable={false}
           centered={false}
           className="settings-panel-wrapper"
         >
-          <SettingsPanel onClose={handleCloseSettings} />
+          <SettingsPanel 
+            onClose={handleCloseSettings}
+            showAudioMeter={showAudioMeter}
+            onToggleAudioMeter={() => setShowAudioMeter(!showAudioMeter)}
+          />
         </DraggablePanel>
       )}
       
       {/* Keyboard shortcuts hint */}
       <div className="shortcuts-hint">
-        <kbd>⌘</kbd><kbd>/</kbd> show/hide · <kbd>⌘</kbd><kbd>'</kbd> transcript · <kbd>⌘</kbd><kbd>\</kbd> reset
+        <kbd>⌘</kbd><kbd>/</kbd> show/hide
       </div>
     </div>
   );

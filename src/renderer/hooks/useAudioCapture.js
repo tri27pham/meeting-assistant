@@ -6,6 +6,7 @@ const BUFFER_SIZE = 4096;
 export function useAudioCapture() {
   const [isMicCapturing, setIsMicCapturing] = useState(false);
   const [isSystemCapturing, setIsSystemCapturing] = useState(false);
+  const [isMeterOnly, setIsMeterOnly] = useState(false); // Meter-only mode (no STT)
   const [micLevel, setMicLevel] = useState(0);
   const [systemLevel, setSystemLevel] = useState(0);
   const [error, setError] = useState(null);
@@ -18,6 +19,7 @@ export function useAudioCapture() {
   const micStreamRef = useRef(null);
   const micProcessorRef = useRef(null);
   const micRecorderRef = useRef(null);
+  const meterOnlyRef = useRef(false); // Track meter-only state for cleanup
   const systemContextRef = useRef(null);
   const systemStreamRef = useRef(null);
   const systemProcessorRef = useRef(null);
@@ -213,6 +215,138 @@ export function useAudioCapture() {
     micPeakRef.current = -60;
   }, []);
 
+  // Start meter-only mode (audio level monitoring without STT/recording)
+  const startMeterOnly = useCallback(async () => {
+    if (isMicCapturing || isMeterOnly) return; // Don't start if already capturing
+
+    try {
+      let stream = micStreamRef.current;
+      
+      if (!stream) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          micStreamRef.current = stream;
+        } catch (mediaErr) {
+          console.warn('[useAudioCapture] Meter-only getUserMedia failed:', mediaErr);
+          return;
+        }
+      }
+
+      let audioContext;
+      try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)({
+          sampleRate: 48000,
+        });
+        if (audioContext.state === 'suspended') {
+          await audioContext.resume();
+        }
+      } catch (ctxErr) {
+        console.warn('[useAudioCapture] Meter-only AudioContext failed:', ctxErr);
+        return;
+      }
+      
+      micContextRef.current = audioContext;
+      const source = audioContext.createMediaStreamSource(stream);
+      
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0.3;
+      source.connect(analyser);
+      micProcessorRef.current = analyser;
+      
+      const rmsToDb = (rms) => {
+        if (rms <= 0) return -60;
+        const db = 20 * Math.log10(rms);
+        return Math.max(-60, Math.min(0, db));
+      };
+      
+      const timeData = new Float32Array(analyser.fftSize);
+      
+      const updateLevel = () => {
+        if (!micProcessorRef.current) return;
+        
+        analyser.getFloatTimeDomainData(timeData);
+        
+        let sumSquares = 0;
+        let peak = 0;
+        for (let i = 0; i < timeData.length; i++) {
+          const sample = timeData[i];
+          sumSquares += sample * sample;
+          const abs = Math.abs(sample);
+          if (abs > peak) peak = abs;
+        }
+        const rms = Math.sqrt(sumSquares / timeData.length);
+        const db = rmsToDb(rms);
+        const peakDb = rmsToDb(peak);
+        
+        micLevelRef.current = rms;
+        micDBRef.current = db;
+        setMicLevel(rms);
+        setMicDB(db);
+        
+        if (peakDb > micPeakRef.current) {
+          micPeakRef.current = peakDb;
+          setMicPeak(peakDb);
+          if (peakHoldTimeoutRef.current) clearTimeout(peakHoldTimeoutRef.current);
+          peakHoldTimeoutRef.current = setTimeout(() => {
+            micPeakRef.current = -60;
+            setMicPeak(-60);
+          }, 500);
+        }
+        
+        animationFrameRef.current = requestAnimationFrame(updateLevel);
+      };
+      animationFrameRef.current = requestAnimationFrame(updateLevel);
+
+      // No MediaRecorder for meter-only mode
+      meterOnlyRef.current = true;
+      setIsMeterOnly(true);
+      setError(null);
+
+    } catch (err) {
+      console.error('[useAudioCapture] Failed to start meter-only:', err);
+    }
+  }, [isMicCapturing, isMeterOnly]);
+
+  // Stop meter-only mode
+  const stopMeterOnly = useCallback(() => {
+    if (!meterOnlyRef.current) return; // Only stop if in meter-only mode
+
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    if (micProcessorRef.current) {
+      micProcessorRef.current.disconnect();
+      micProcessorRef.current = null;
+    }
+
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach(track => track.stop());
+      micStreamRef.current = null;
+    }
+
+    if (micContextRef.current && micContextRef.current.state !== 'closed') {
+      micContextRef.current.close();
+      micContextRef.current = null;
+    }
+
+    if (peakHoldTimeoutRef.current) {
+      clearTimeout(peakHoldTimeoutRef.current);
+      peakHoldTimeoutRef.current = null;
+    }
+
+    meterOnlyRef.current = false;
+    setIsMeterOnly(false);
+    setMicLevel(0);
+    setMicDB(-60);
+    setMicPeak(-60);
+    micLevelRef.current = 0;
+    micDBRef.current = -60;
+    micPeakRef.current = -60;
+  }, []);
+
   const startSystemCapture = useCallback(async () => {
     if (isSystemCapturing) return;
 
@@ -339,6 +473,8 @@ export function useAudioCapture() {
     isMicCapturing,
     isSystemCapturing,
     isCapturing: isMicCapturing || isSystemCapturing,
+    isMeterOnly,
+    isMeterActive: isMicCapturing || isMeterOnly, // True if any mic monitoring is active
     micLevel,
     systemLevel,
     error,
@@ -349,6 +485,8 @@ export function useAudioCapture() {
     preAuthorizeMic,
     startMicCapture,
     stopMicCapture,
+    startMeterOnly,
+    stopMeterOnly,
     startSystemCapture,
     stopSystemCapture,
     startAllCapture,
