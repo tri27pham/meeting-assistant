@@ -6,6 +6,8 @@ const path = require('path');
 const permissionManager = require('./services/PermissionManager');
 // AudioCaptureService coordinates audio capture from mic and system
 const audioCaptureService = require('./services/AudioCaptureService');
+// STTService handles speech-to-text transcription
+const sttService = require('./services/STTService');
 
 // Keep a global reference to prevent garbage collection
 let overlayWindow = null;
@@ -218,6 +220,9 @@ function setupIPC() {
    * The renderer captures audio and sends it here for processing
    */
   ipcMain.on('audio:chunk', (event, chunk) => {
+    // Forward to audio capture service (for PCM processing)
+    // AudioCaptureService converts Float32 to PCM and buffers it
+    // Then emits 'audio:buffer-ready' which triggers STT
     audioCaptureService.processAudioChunk(chunk);
   });
 
@@ -270,6 +275,79 @@ function setupIPC() {
    */
   ipcMain.handle('audio:get-state', async () => {
     return audioCaptureService.getState();
+  });
+
+  // ============================================
+  // STT (SPEECH-TO-TEXT) HANDLERS
+  // ============================================
+
+  /**
+   * Set STT mode ('local' or 'api')
+   */
+  ipcMain.handle('stt:set-mode', async (event, mode) => {
+    await sttService.setMode(mode);
+    return { success: true, mode };
+  });
+
+  /**
+   * Set OpenAI API key for Whisper (API mode)
+   */
+  ipcMain.handle('stt:set-api-key', async (event, apiKey) => {
+    sttService.setApiKey(apiKey);
+    return { success: true };
+  });
+
+  /**
+   * Set local model to use
+   */
+  ipcMain.handle('stt:set-local-model', async (event, model) => {
+    sttService.setLocalModel(model);
+    return { success: true, model };
+  });
+
+  /**
+   * Enable/disable STT
+   */
+  ipcMain.handle('stt:set-enabled', async (event, enabled) => {
+    await sttService.setEnabled(enabled);
+    return { success: true };
+  });
+
+  /**
+   * Get STT state
+   */
+  ipcMain.handle('stt:get-state', async () => {
+    return sttService.getState();
+  });
+
+  /**
+   * Get transcriptions
+   */
+  ipcMain.handle('stt:get-transcriptions', async () => {
+    return sttService.getTranscriptions();
+  });
+
+  /**
+   * Get full transcript
+   */
+  ipcMain.handle('stt:get-transcript', async () => {
+    return sttService.getFullTranscript();
+  });
+
+  /**
+   * Clear transcriptions
+   */
+  ipcMain.handle('stt:clear', async () => {
+    sttService.clearTranscriptions();
+    return { success: true };
+  });
+
+  /**
+   * Flush current buffer (transcribe now)
+   */
+  ipcMain.handle('stt:flush', async () => {
+    await sttService.flushBuffer();
+    return { success: true };
   });
 
   // Window control
@@ -332,6 +410,34 @@ app.whenReady().then(() => {
   // Set window reference for audio capture service
   // This allows it to send IPC messages to the renderer
   audioCaptureService.setOverlayWindow(overlayWindow);
+
+  // Connect audio capture to STT service
+  // When audio buffers are ready, send them to STT for transcription
+  // TEMPORARILY DISABLED - focusing on audio capture quality first
+  // audioCaptureService.on('audio:buffer-ready', (chunk) => {
+  //   sttService.processAudioChunk(chunk);
+  // });
+
+  // Forward audio levels (including dB) to renderer for monitoring
+  audioCaptureService.on('audio:level', (data) => {
+    if (overlayWindow) {
+      overlayWindow.webContents.send('audio:level', data);
+    }
+  });
+
+  // Forward STT transcriptions to renderer
+  sttService.on('transcription', (result) => {
+    console.log('[Main] Forwarding transcription to renderer:', result.text);
+    if (overlayWindow) {
+      overlayWindow.webContents.send('stt:transcription', result);
+    }
+  });
+
+  sttService.on('error', (error) => {
+    if (overlayWindow) {
+      overlayWindow.webContents.send('stt:error', { message: error.message });
+    }
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

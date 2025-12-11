@@ -86,6 +86,57 @@ contextBridge.exposeInMainWorld('cluely', {
   },
 
   // ============================================
+  // SPEECH-TO-TEXT (STT)
+  // ============================================
+  stt: {
+    /**
+     * Set STT mode ('local' or 'api')
+     */
+    setMode: (mode) => ipcRenderer.invoke('stt:set-mode', mode),
+
+    /**
+     * Set OpenAI API key for Whisper (API mode)
+     */
+    setApiKey: (apiKey) => ipcRenderer.invoke('stt:set-api-key', apiKey),
+
+    /**
+     * Set local model to use
+     * Options: 'Xenova/whisper-tiny.en', 'Xenova/whisper-base.en', 'Xenova/whisper-small.en'
+     */
+    setLocalModel: (model) => ipcRenderer.invoke('stt:set-local-model', model),
+
+    /**
+     * Enable/disable STT transcription
+     */
+    setEnabled: (enabled) => ipcRenderer.invoke('stt:set-enabled', enabled),
+
+    /**
+     * Get current STT state
+     */
+    getState: () => ipcRenderer.invoke('stt:get-state'),
+
+    /**
+     * Get all transcriptions
+     */
+    getTranscriptions: () => ipcRenderer.invoke('stt:get-transcriptions'),
+
+    /**
+     * Get full transcript as string
+     */
+    getTranscript: () => ipcRenderer.invoke('stt:get-transcript'),
+
+    /**
+     * Clear all transcriptions
+     */
+    clear: () => ipcRenderer.invoke('stt:clear'),
+
+    /**
+     * Flush buffer (transcribe now)
+     */
+    flush: () => ipcRenderer.invoke('stt:flush'),
+  },
+
+  // ============================================
   // SESSION CONTROL
   // ============================================
   session: {
@@ -111,10 +162,22 @@ contextBridge.exposeInMainWorld('cluely', {
 
   // Event listeners for backend → UI communication
   on: {
-    // Receive transcript updates from backend
+    // Receive transcript updates from backend (legacy)
     transcriptUpdate: (callback) => {
       ipcRenderer.on('transcript:update', (event, segment) => callback(segment));
       return () => ipcRenderer.removeAllListeners('transcript:update');
+    },
+
+    // Receive STT transcription results
+    sttTranscription: (callback) => {
+      ipcRenderer.on('stt:transcription', (event, result) => callback(result));
+      return () => ipcRenderer.removeAllListeners('stt:transcription');
+    },
+
+    // Receive STT errors
+    sttError: (callback) => {
+      ipcRenderer.on('stt:error', (event, error) => callback(error));
+      return () => ipcRenderer.removeAllListeners('stt:error');
     },
 
     // Receive AI suggestions from backend

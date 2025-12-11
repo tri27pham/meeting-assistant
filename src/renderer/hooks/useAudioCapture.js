@@ -47,11 +47,18 @@ export function useAudioCapture() {
   const [micLevel, setMicLevel] = useState(0);
   const [systemLevel, setSystemLevel] = useState(0);
   const [error, setError] = useState(null);
+  
+  // dB levels for audio meter (real-time)
+  const [micDB, setMicDB] = useState(-60);
+  const [micPeak, setMicPeak] = useState(-60);
+  const [systemDB, setSystemDB] = useState(-60);
+  const [systemPeak, setSystemPeak] = useState(-60);
 
   // Audio context and stream refs
   const micContextRef = useRef(null);
   const micStreamRef = useRef(null);
   const micProcessorRef = useRef(null);
+  const micRecorderRef = useRef(null); // MediaRecorder for STT
   
   const systemContextRef = useRef(null);
   const systemStreamRef = useRef(null);
@@ -60,7 +67,12 @@ export function useAudioCapture() {
   // Level refs for audio callback (avoid setState in audio callback)
   const micLevelRef = useRef(0);
   const systemLevelRef = useRef(0);
+  const micDBRef = useRef(-60);
+  const micPeakRef = useRef(-60);
   const animationFrameRef = useRef(null);
+  
+  // Peak hold decay
+  const peakHoldTimeoutRef = useRef(null);
 
   /**
    * Pre-authorize microphone access
@@ -129,29 +141,90 @@ export function useAudioCapture() {
       // Create source from stream
       const source = audioContext.createMediaStreamSource(stream);
       
-      // Use AnalyserNode for level metering (simpler than ScriptProcessor)
+      // Use AnalyserNode for level metering AND audio capture for local STT
       const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256;
+      analyser.fftSize = 4096; // Larger for better audio capture
       analyser.smoothingTimeConstant = 0.3;
       source.connect(analyser);
       // Don't connect to destination - we don't want audio output
       
       micProcessorRef.current = analyser;
       
-      // Poll analyser for level updates
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      // Arrays for audio capture
+      const frequencyData = new Uint8Array(analyser.frequencyBinCount);
+      const timeData = new Float32Array(analyser.fftSize);
+      
+      // Buffer for accumulating audio samples
+      let audioSampleBuffer = [];
+      let lastSendTime = Date.now();
+      const SEND_INTERVAL_MS = 3000; // Send every 3 seconds
+      
+      // Helper: Convert RMS to dB (dBFS)
+      const rmsToDb = (rms) => {
+        if (rms <= 0) return -60;
+        const db = 20 * Math.log10(rms);
+        return Math.max(-60, Math.min(0, db));
+      };
+      
+      // Poll analyser for level updates and audio capture
       const updateLevel = () => {
         if (!micProcessorRef.current) return;
         
-        analyser.getByteFrequencyData(dataArray);
-        // Calculate average level
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) {
-          sum += dataArray[i];
+        // Get time domain data for dB calculation
+        analyser.getFloatTimeDomainData(timeData);
+        
+        // Calculate RMS and Peak from time domain data
+        let sumSquares = 0;
+        let peak = 0;
+        for (let i = 0; i < timeData.length; i++) {
+          const sample = timeData[i];
+          sumSquares += sample * sample;
+          const abs = Math.abs(sample);
+          if (abs > peak) peak = abs;
         }
-        const avg = sum / dataArray.length / 255; // Normalize to 0-1
-        micLevelRef.current = avg;
-        setMicLevel(avg);
+        const rms = Math.sqrt(sumSquares / timeData.length);
+        
+        // Convert to dB
+        const db = rmsToDb(rms);
+        const peakDb = rmsToDb(peak);
+        
+        // Update refs and state
+        micLevelRef.current = rms;
+        micDBRef.current = db;
+        setMicLevel(rms);
+        setMicDB(db);
+        
+        // Peak hold with decay
+        if (peakDb > micPeakRef.current) {
+          micPeakRef.current = peakDb;
+          setMicPeak(peakDb);
+          // Reset peak after 500ms
+          if (peakHoldTimeoutRef.current) clearTimeout(peakHoldTimeoutRef.current);
+          peakHoldTimeoutRef.current = setTimeout(() => {
+            micPeakRef.current = -60;
+            setMicPeak(-60);
+          }, 500);
+        }
+        
+        // Add samples to buffer (only if there's meaningful audio)
+        if (rms > 0.01) {
+          audioSampleBuffer.push(...timeData);
+        }
+        
+        // Send buffer periodically for STT
+        const now = Date.now();
+        if (now - lastSendTime >= SEND_INTERVAL_MS && audioSampleBuffer.length > 0) {
+          if (window.cluely?.audio?.sendAudioChunk) {
+            window.cluely.audio.sendAudioChunk({
+              source: 'mic',
+              data: audioSampleBuffer,
+              sampleRate: audioContext.sampleRate,
+              timestamp: now,
+            });
+          }
+          audioSampleBuffer = [];
+          lastSendTime = now;
+        }
         
         animationFrameRef.current = requestAnimationFrame(updateLevel);
       };
@@ -193,6 +266,12 @@ export function useAudioCapture() {
       animationFrameRef.current = null;
     }
 
+    // Stop MediaRecorder
+    if (micRecorderRef.current && micRecorderRef.current.state !== 'inactive') {
+      micRecorderRef.current.stop();
+      micRecorderRef.current = null;
+    }
+
     // Disconnect processor
     if (micProcessorRef.current) {
       micProcessorRef.current.disconnect();
@@ -211,9 +290,19 @@ export function useAudioCapture() {
       micContextRef.current = null;
     }
 
+    // Clear peak hold timeout
+    if (peakHoldTimeoutRef.current) {
+      clearTimeout(peakHoldTimeoutRef.current);
+      peakHoldTimeoutRef.current = null;
+    }
+
     setIsMicCapturing(false);
     setMicLevel(0);
+    setMicDB(-60);
+    setMicPeak(-60);
     micLevelRef.current = 0;
+    micDBRef.current = -60;
+    micPeakRef.current = -60;
     console.log('[useAudioCapture] Mic capture stopped');
   }, []);
 
@@ -433,6 +522,12 @@ export function useAudioCapture() {
     micLevel,
     systemLevel,
     error,
+    
+    // dB levels (real-time)
+    micDB,
+    micPeak,
+    systemDB,
+    systemPeak,
 
     // Controls
     preAuthorizeMic,  // Call during permission setup

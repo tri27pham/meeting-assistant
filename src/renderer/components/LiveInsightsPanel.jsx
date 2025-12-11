@@ -1,13 +1,17 @@
 import React from 'react';
-import { SparkleIcon, TranscriptIcon, CopyIcon, BookIcon, GlobeIcon, ChatIcon } from './Icons';
+import { SparkleIcon, TranscriptIcon, CopyIcon, BookIcon, GlobeIcon, ChatIcon, MeterIcon } from './Icons';
+import AudioMeter from './AudioMeter';
 
 function LiveInsightsPanel({ 
   insights, 
   actions, 
   selectedAction, 
   showTranscript,
+  showAudioMeter = false,
+  audioLevels = { dB: -60, peak: -60, rms: 0 },
   transcript,
   onToggleTranscript, 
+  onToggleAudioMeter,
   onActionSelect,
   onCopyInsights
 }) {
@@ -37,6 +41,15 @@ function LiveInsightsPanel({
         </div>
         <div className="panel-actions">
           <button 
+            className={`header-btn icon-only ${showAudioMeter ? 'active' : ''}`}
+            onClick={onToggleAudioMeter}
+            aria-pressed={showAudioMeter}
+            aria-label={showAudioMeter ? 'Hide audio meter' : 'Show audio meter'}
+            title={showAudioMeter ? 'Hide audio meter' : 'Show audio meter'}
+          >
+            <MeterIcon />
+          </button>
+          <button 
             className="header-btn" 
             onClick={onToggleTranscript}
             aria-pressed={showTranscript}
@@ -53,6 +66,18 @@ function LiveInsightsPanel({
           </button>
         </div>
       </div>
+
+      {/* Audio Level Meter */}
+      {showAudioMeter && (
+        <div className="audio-meter-section">
+          <AudioMeter 
+            source="mic" 
+            dB={audioLevels.dB}
+            peak={audioLevels.peak}
+            rms={audioLevels.rms}
+          />
+        </div>
+      )}
 
       {/* Content - Transcript or Insights */}
       {showTranscript ? (

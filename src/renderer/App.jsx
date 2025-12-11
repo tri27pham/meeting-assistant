@@ -2,18 +2,21 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import ControlBar from './components/ControlBar';
 import LiveInsightsPanel from './components/LiveInsightsPanel';
 import AIResponsePanel from './components/AIResponsePanel';
+import TranscriptionPanel from './components/TranscriptionPanel';
 import DraggablePanel from './components/DraggablePanel';
 import PermissionSetup from './components/PermissionSetup';
 import SettingsPanel from './components/SettingsPanel';
 import { useAudioCapture } from './hooks/useAudioCapture';
+import { useSTT } from './hooks/useSTT';
 
 // Panel IDs for localStorage keys
-const PANEL_IDS = ['control-bar', 'live-insights', 'ai-response', 'settings'];
+const PANEL_IDS = ['control-bar', 'live-insights', 'ai-response', 'transcription', 'settings'];
 
 // Default panel sizes
 const PANEL_SIZES = {
   liveInsights: { width: 420, height: 400 },
   aiResponse: { width: 450, height: 380 },
+  transcription: { width: 380, height: 350 },
 };
 
 function App() {
@@ -36,6 +39,8 @@ function App() {
     isCapturing,
     micLevel,
     systemLevel,
+    micDB,
+    micPeak,
     error: audioError,
     preAuthorizeMic,
     startMicCapture,
@@ -46,11 +51,25 @@ function App() {
     stopAllCapture,
   } = useAudioCapture();
 
+  // STT (Speech-to-Text) hook
+  const {
+    isEnabled: sttEnabled,
+    isReady: sttReady,
+    currentTranscript,
+    transcriptions,
+    error: sttError,
+    setApiKey: setSTTApiKey,
+    enable: enableSTT,
+    disable: disableSTT,
+    clear: clearSTT,
+  } = useSTT();
+
   // Layout reset key - incrementing this forces panels to remount
   const [layoutKey, setLayoutKey] = useState(0);
 
   // UI state
-  const [showTranscript, setShowTranscript] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(true); // Show by default now
+  const [showAudioMeter, setShowAudioMeter] = useState(false); // Audio meter hidden by default
   
   // Calculate default positions based on screen size
   const defaultPositions = useMemo(() => {
@@ -66,17 +85,21 @@ function App() {
     const topOffset = Math.floor(screenHeight * 0.10); // 10% from top (was 80px, moved down 5%)
     
     return {
-      controlBar: { 
+      controlBar: {
         x: 0, // Centered via CSS and centered prop
-        y: 16 
+        y: 16
       },
-      liveInsights: { 
+      liveInsights: {
         x: margin - containerPadding, // 16px from container = 32px from screen
-        y: topOffset 
+        y: topOffset
       },
-      aiResponse: { 
+      aiResponse: {
         x: screenWidth - PANEL_SIZES.aiResponse.width - margin - containerPadding,
-        y: topOffset 
+        y: topOffset
+      },
+      transcription: {
+        x: margin - containerPadding,
+        y: topOffset + PANEL_SIZES.liveInsights.height + 16 // Below live insights
       },
     };
   }, [layoutKey]); // Recalculate when layout resets
@@ -103,7 +126,19 @@ function App() {
     origin: 'cloud',
   });
 
-  const [transcript, setTranscript] = useState([]);
+  const [legacyTranscript, setLegacyTranscript] = useState([]);
+  
+  // Combine STT transcriptions with legacy transcript
+  const transcript = useMemo(() => {
+    // Convert STT transcriptions to transcript format
+    const sttItems = transcriptions.map((t, i) => ({
+      id: `stt-${i}`,
+      text: t.text,
+      timestamp: t.timestamp,
+      speaker: 'You', // Mic captures your voice
+    }));
+    return [...sttItems, ...legacyTranscript];
+  }, [transcriptions, legacyTranscript]);
 
   // Timer effect
   useEffect(() => {
@@ -185,7 +220,7 @@ function App() {
     if (!window.cluely) return;
 
     const unsubTranscript = window.cluely.on.transcriptUpdate((segment) => {
-      setTranscript((prev) => [...prev, segment]);
+      setLegacyTranscript((prev) => [...prev, segment]);
     });
 
     const unsubSuggestion = window.cluely.on.suggestion((suggestion) => {
@@ -225,19 +260,25 @@ function App() {
         console.log('[App] Starting audio capture...');
         setIsRunning(true);
         setIsPaused(false);
-        
+
         // Start mic capture (wrapped in try-catch)
         try {
           await startMicCapture();
         } catch (err) {
           console.error('[App] Failed to start mic capture:', err);
         }
+        
+        // Enable STT (local mode is always ready)
+        await enableSTT();
       } else {
         // Currently running, stop capturing
         console.log('[App] Stopping audio capture...');
         setIsPaused(true);
         stopMicCapture();
         stopSystemCapture();
+        
+        // Disable STT
+        await disableSTT();
       }
 
       // Also notify backend
@@ -247,7 +288,7 @@ function App() {
     } catch (err) {
       console.error('[App] Error in handleTogglePause:', err);
     }
-  }, [isPaused, startMicCapture, stopMicCapture, stopSystemCapture]);
+  }, [isPaused, startMicCapture, stopMicCapture, stopSystemCapture, enableSTT, disableSTT]);
 
   const handleAskAI = useCallback(async () => {
     if (window.cluely) {
@@ -358,7 +399,7 @@ function App() {
       </DraggablePanel>
       
       {/* Live Insights Panel - 1/4 down from top, left aligned */}
-      <DraggablePanel 
+      <DraggablePanel
         key={`live-insights-${layoutKey}`}
         panelId="live-insights"
         initialPosition={defaultPositions.liveInsights}
@@ -372,13 +413,33 @@ function App() {
           actions={actions}
           selectedAction={selectedAction}
           showTranscript={showTranscript}
+          showAudioMeter={showAudioMeter && isCapturing}
+          audioLevels={{ dB: micDB, peak: micPeak, rms: micLevel }}
           transcript={transcript}
           onToggleTranscript={() => setShowTranscript(!showTranscript)}
+          onToggleAudioMeter={() => setShowAudioMeter(!showAudioMeter)}
           onActionSelect={handleActionSelect}
           onCopyInsights={handleCopyInsights}
         />
       </DraggablePanel>
-      
+
+      {/* Live Transcription Panel - Below live insights */}
+      <DraggablePanel
+        key={`transcription-${layoutKey}`}
+        panelId="transcription"
+        initialPosition={defaultPositions.transcription}
+        initialSize={PANEL_SIZES.transcription}
+        minSize={{ width: 300, height: 200 }}
+        maxSize={{ width: 500, height: 600 }}
+        resizable={true}
+      >
+        <TranscriptionPanel
+          transcriptions={transcriptions}
+          isRecording={isCapturing && !isPaused}
+          onClear={clearSTT}
+        />
+      </DraggablePanel>
+
       {/* AI Response Panel - 1/4 down from top, right aligned */}
       {aiResponse && (
         <DraggablePanel 

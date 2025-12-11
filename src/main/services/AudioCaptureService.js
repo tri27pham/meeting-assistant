@@ -203,31 +203,44 @@ class AudioCaptureService extends EventEmitter {
   processAudioChunk(chunk) {
     const { source, data, sampleRate, timestamp } = chunk;
     
+    // Store the sample rate for duration calculations
+    this._sampleRate = sampleRate || 48000;
+    
     // Add server timestamp
     const serverTimestamp = Date.now();
     
     // Convert Float32 samples to 16-bit PCM
     const pcmData = this._float32ToPCM16(data);
     
-    // Calculate audio level (RMS) for visualization
-    const level = this._calculateRMS(data);
+    // Calculate audio levels for visualization
+    const rms = this._calculateRMS(data);
+    const peak = this._calculatePeak(data);
+    const dB = this._rmsToDecibels(rms);
+    const peakdB = this._rmsToDecibels(peak);
     
     if (source === 'mic') {
-      this._micLevel = level;
+      this._micLevel = rms;
       this._micBuffer.push(pcmData);
     } else if (source === 'system') {
-      this._systemLevel = level;
+      this._systemLevel = rms;
       this._systemBuffer.push(pcmData);
     }
     
-    // Emit level update for UI visualization
-    this.emit('audio:level', { source, level });
+    // Emit level update for UI visualization (includes dB levels)
+    this.emit('audio:level', { 
+      source, 
+      level: rms, 
+      peak,
+      dB, 
+      peakdB,
+      sampleCount: data.length,
+    });
     
     // Create processed chunk
     const processedChunk = {
       source,
       pcmData,
-      sampleRate,
+      sampleRate: this._sampleRate,
       clientTimestamp: timestamp,
       serverTimestamp,
     };
@@ -245,6 +258,7 @@ class AudioCaptureService extends EventEmitter {
    */
   _checkBufferFlush(source) {
     const buffer = source === 'mic' ? this._micBuffer : this._systemBuffer;
+    const sampleRate = this._sampleRate || 48000;
     
     // Calculate total samples in buffer
     let totalSamples = 0;
@@ -252,8 +266,8 @@ class AudioCaptureService extends EventEmitter {
       totalSamples += chunk.length / 2; // 16-bit = 2 bytes per sample
     }
     
-    // At 16kHz, 1 second = 16000 samples
-    const durationMs = (totalSamples / 16000) * 1000;
+    // Calculate duration using actual sample rate
+    const durationMs = (totalSamples / sampleRate) * 1000;
     
     if (durationMs >= this._targetBufferDuration) {
       // Concatenate all chunks
@@ -267,16 +281,16 @@ class AudioCaptureService extends EventEmitter {
         this._systemBuffer = [];
       }
       
-      // Emit combined chunk for STT processing
+      // Emit combined chunk for STT processing with actual sample rate
       this.emit('audio:buffer-ready', {
         source,
         pcmData: combined,
-        sampleRate: 16000,
+        sampleRate, // Use actual sample rate
         durationMs,
         timestamp: Date.now(),
       });
       
-      console.log(`[AudioCaptureService] Buffer ready: ${source}, ${durationMs.toFixed(0)}ms, ${combined.length} bytes`);
+      console.log(`[AudioCaptureService] Buffer ready: ${source}, ${durationMs.toFixed(0)}ms, ${combined.length} bytes, ${sampleRate}Hz`);
     }
   }
 
@@ -318,6 +332,36 @@ class AudioCaptureService extends EventEmitter {
     }
     
     return Math.sqrt(sum / samples.length);
+  }
+
+  /**
+   * Convert RMS level to decibels (dBFS - decibels relative to full scale)
+   * 0 dBFS = maximum possible level (RMS = 1.0)
+   * -infinity dBFS = silence
+   * 
+   * @param {number} rms - RMS level from 0 to 1
+   * @returns {number} - dBFS value (typically -60 to 0)
+   */
+  _rmsToDecibels(rms) {
+    if (rms <= 0) return -60; // Floor at -60 dB
+    const db = 20 * Math.log10(rms);
+    return Math.max(-60, Math.min(0, db)); // Clamp between -60 and 0
+  }
+
+  /**
+   * Calculate peak level from samples
+   * @param {number[]} samples - Float32 audio samples
+   * @returns {number} - Peak level from 0 to 1
+   */
+  _calculatePeak(samples) {
+    if (!samples || samples.length === 0) return 0;
+    
+    let peak = 0;
+    for (let i = 0; i < samples.length; i++) {
+      const abs = Math.abs(samples[i]);
+      if (abs > peak) peak = abs;
+    }
+    return peak;
   }
 
   /**
