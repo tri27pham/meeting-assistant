@@ -1,33 +1,11 @@
 import React from 'react';
 
-/**
- * AudioMeter - Visual dB meter for monitoring audio input levels
- * 
- * Displays:
- * - Real-time dB level (dBFS - decibels relative to full scale)
- * - Peak level indicator
- * - Visual bar meter with color coding
- * - Quality indicator (Good/Low/Clipping)
- * 
- * Props:
- * - dB: Current dB level (-60 to 0)
- * - peak: Peak dB level (-60 to 0)
- * - rms: RMS level (0 to 1)
- * - source: 'mic' or 'system'
- */
-function AudioMeter({ 
-  dB = -60, 
-  peak = -60, 
-  rms = 0, 
-  source = 'mic' 
-}) {
-  // Convert dB to percentage for bar display (0 dB = 100%, -60 dB = 0%)
+function AudioMeter({ dB = -60, peak = -60, rms = 0, source = 'mic' }) {
   const dbToPercent = (db) => Math.max(0, Math.min(100, ((db + 60) / 60) * 100));
   
   const levelPercent = dbToPercent(dB);
   const peakPercent = dbToPercent(peak);
 
-  // Determine quality/status
   const getStatus = () => {
     if (peak >= -1) return { text: 'CLIPPING', color: '#ff4444' };
     if (dB >= -12) return { text: 'Good', color: '#44ff44' };
@@ -38,12 +16,11 @@ function AudioMeter({
 
   const status = getStatus();
 
-  // Color gradient for the bar
   const getBarColor = (percent) => {
-    if (percent > 95) return '#ff4444'; // Clipping (red)
-    if (percent > 80) return '#ff8844'; // Hot (orange)
-    if (percent > 50) return '#44ff44'; // Good (green)
-    return '#44aaff'; // Low (blue)
+    if (percent > 95) return '#ff4444';
+    if (percent > 80) return '#ff8844';
+    if (percent > 50) return '#44ff44';
+    return '#44aaff';
   };
 
   return (
@@ -55,7 +32,6 @@ function AudioMeter({
         </span>
       </div>
       
-      {/* Visual bar meter */}
       <div className="audio-meter-bar-container">
         <div 
           className="audio-meter-bar" 
@@ -64,12 +40,10 @@ function AudioMeter({
             backgroundColor: getBarColor(levelPercent),
           }}
         />
-        {/* Peak indicator */}
         <div 
           className="audio-meter-peak"
           style={{ left: `${peakPercent}%` }}
         />
-        {/* Scale markers */}
         <div className="audio-meter-scale">
           <span style={{ left: '0%' }}>-60</span>
           <span style={{ left: '50%' }}>-30</span>
@@ -78,7 +52,6 @@ function AudioMeter({
         </div>
       </div>
 
-      {/* Numeric display */}
       <div className="audio-meter-values">
         <div className="audio-meter-value">
           <span className="audio-meter-label">Level</span>
@@ -94,7 +67,6 @@ function AudioMeter({
         </div>
       </div>
 
-      {/* Guidance text */}
       <div className="audio-meter-guide">
         {dB < -50 && <span>Speak louder or move closer to mic</span>}
         {dB >= -50 && dB < -30 && <span>Audio is a bit quiet</span>}

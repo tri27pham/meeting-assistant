@@ -6,7 +6,7 @@ const BUFFER_SIZE = 4096;
 export function useAudioCapture() {
   const [isMicCapturing, setIsMicCapturing] = useState(false);
   const [isSystemCapturing, setIsSystemCapturing] = useState(false);
-  const [isMeterOnly, setIsMeterOnly] = useState(false); // Meter-only mode (no STT)
+  const [isMeterOnly, setIsMeterOnly] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   const [systemLevel, setSystemLevel] = useState(0);
   const [error, setError] = useState(null);
@@ -19,7 +19,7 @@ export function useAudioCapture() {
   const micStreamRef = useRef(null);
   const micProcessorRef = useRef(null);
   const micRecorderRef = useRef(null);
-  const meterOnlyRef = useRef(false); // Track meter-only state for cleanup
+  const meterOnlyRef = useRef(false);
   const systemContextRef = useRef(null);
   const systemStreamRef = useRef(null);
   const systemProcessorRef = useRef(null);
@@ -61,12 +61,8 @@ export function useAudioCapture() {
 
       let audioContext;
       try {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)({
-          sampleRate: 48000,
-        });
-        if (audioContext.state === 'suspended') {
-          await audioContext.resume();
-        }
+        audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+        if (audioContext.state === 'suspended') await audioContext.resume();
       } catch (ctxErr) {
         console.warn('[useAudioCapture] AudioContext failed:', ctxErr);
         return startSimulatedCapture();
@@ -125,7 +121,6 @@ export function useAudioCapture() {
       };
       animationFrameRef.current = requestAnimationFrame(updateLevel);
       
-      // MediaRecorder sends webm/opus directly to Deepgram
       try {
         const mimeType = 'audio/webm;codecs=opus';
         const mediaRecorder = new MediaRecorder(stream, {
@@ -141,10 +136,7 @@ export function useAudioCapture() {
           }
         };
         
-        mediaRecorder.onerror = (err) => {
-          console.error('[useAudioCapture] MediaRecorder error:', err);
-        };
-        
+        mediaRecorder.onerror = (err) => console.error('[useAudioCapture] MediaRecorder error:', err);
         mediaRecorder.start(250);
       } catch (recorderErr) {
         console.error('[useAudioCapture] MediaRecorder failed:', recorderErr);
@@ -215,9 +207,8 @@ export function useAudioCapture() {
     micPeakRef.current = -60;
   }, []);
 
-  // Start meter-only mode (audio level monitoring without STT/recording)
   const startMeterOnly = useCallback(async () => {
-    if (isMicCapturing || isMeterOnly) return; // Don't start if already capturing
+    if (isMicCapturing || isMeterOnly) return;
 
     try {
       let stream = micStreamRef.current;
@@ -234,12 +225,8 @@ export function useAudioCapture() {
 
       let audioContext;
       try {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)({
-          sampleRate: 48000,
-        });
-        if (audioContext.state === 'suspended') {
-          await audioContext.resume();
-        }
+        audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+        if (audioContext.state === 'suspended') await audioContext.resume();
       } catch (ctxErr) {
         console.warn('[useAudioCapture] Meter-only AudioContext failed:', ctxErr);
         return;
@@ -298,7 +285,6 @@ export function useAudioCapture() {
       };
       animationFrameRef.current = requestAnimationFrame(updateLevel);
 
-      // No MediaRecorder for meter-only mode
       meterOnlyRef.current = true;
       setIsMeterOnly(true);
       setError(null);
@@ -308,9 +294,8 @@ export function useAudioCapture() {
     }
   }, [isMicCapturing, isMeterOnly]);
 
-  // Stop meter-only mode
   const stopMeterOnly = useCallback(() => {
-    if (!meterOnlyRef.current) return; // Only stop if in meter-only mode
+    if (!meterOnlyRef.current) return;
 
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
@@ -358,9 +343,7 @@ export function useAudioCapture() {
 
       systemStreamRef.current = stream;
       const audioTracks = stream.getAudioTracks();
-      if (audioTracks.length === 0) {
-        throw new Error('No audio track in system capture');
-      }
+      if (audioTracks.length === 0) throw new Error('No audio track in system capture');
 
       let audioContext;
       try {
@@ -407,11 +390,8 @@ export function useAudioCapture() {
     } catch (err) {
       console.error('[useAudioCapture] Failed to start system capture:', err);
       let errorMsg = err.message;
-      if (err.name === 'NotAllowedError') {
-        errorMsg = 'Screen Recording permission required';
-      } else if (err.name === 'NotFoundError') {
-        errorMsg = 'No audio source found';
-      }
+      if (err.name === 'NotAllowedError') errorMsg = 'Screen Recording permission required';
+      else if (err.name === 'NotFoundError') errorMsg = 'No audio source found';
       setError(errorMsg);
     }
   }, [isSystemCapturing]);
@@ -474,7 +454,7 @@ export function useAudioCapture() {
     isSystemCapturing,
     isCapturing: isMicCapturing || isSystemCapturing,
     isMeterOnly,
-    isMeterActive: isMicCapturing || isMeterOnly, // True if any mic monitoring is active
+    isMeterActive: isMicCapturing || isMeterOnly,
     micLevel,
     systemLevel,
     error,
