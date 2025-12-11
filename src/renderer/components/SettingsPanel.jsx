@@ -1,15 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { CloseIcon } from './Icons';
 
-/**
- * SettingsPanel Component
- * 
- * A settings panel that shows:
- * - Permission status
- * - (Future: other settings like audio source, AI model, etc.)
- */
-
-// Status icons
 const CheckIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
     <circle cx="8" cy="8" r="7" fill="rgba(52, 199, 89, 0.2)" stroke="#34C759" strokeWidth="1.5"/>
@@ -32,6 +23,18 @@ const DeniedIcon = () => (
   </svg>
 );
 
+const ChevronIcon = ({ expanded }) => (
+  <svg 
+    width="12" 
+    height="12" 
+    viewBox="0 0 12 12" 
+    fill="none"
+    style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}
+  >
+    <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
 function getStatusIcon(status) {
   if (status === 'granted' || status === true) return <CheckIcon />;
   if (status === 'denied' || status === false) return <DeniedIcon />;
@@ -46,15 +49,23 @@ function getStatusLabel(status) {
   return 'Unknown';
 }
 
-function SettingsPanel({ onClose }) {
+function SettingsPanel({ onClose, showAudioMeter, onToggleAudioMeter }) {
   const [permissions, setPermissions] = useState({
     microphone: 'not-determined',
     screenRecording: 'not-determined',
     accessibility: false,
     allGranted: false,
   });
+  
+  const [expandedSections, setExpandedSections] = useState({
+    permissions: false,
+    shortcuts: false,
+  });
 
-  // Fetch permissions on mount and poll for changes
+  const toggleSection = (section) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
   useEffect(() => {
     const fetchPermissions = async () => {
       if (!window.cluely?.permissions) return;
@@ -90,88 +101,111 @@ function SettingsPanel({ onClose }) {
         </button>
       </div>
 
-      {/* Permissions Section */}
       <div className="settings-section">
-        <h3 className="settings-section-title">Permissions</h3>
-        <p className="settings-section-desc">
-          These permissions are required for full functionality.
-        </p>
-
-        <div className="settings-permission-list">
-          {/* Microphone */}
-          <div className={`settings-permission-row ${permissions.microphone === 'granted' ? 'granted' : ''}`}>
-            <div className="settings-permission-icon">
-              {getStatusIcon(permissions.microphone)}
-            </div>
-            <div className="settings-permission-info">
-              <span className="settings-permission-name">Microphone</span>
-              <span className="settings-permission-status">
-                {getStatusLabel(permissions.microphone)}
-              </span>
-            </div>
-            {permissions.microphone !== 'granted' && (
-              <button 
-                className="settings-permission-btn"
-                onClick={() => handleOpenPreferences('microphone')}
-              >
-                Open Settings
-              </button>
-            )}
-          </div>
-
-          {/* Screen Recording */}
-          <div className={`settings-permission-row ${permissions.screenRecording === 'granted' ? 'granted' : ''}`}>
-            <div className="settings-permission-icon">
-              {getStatusIcon(permissions.screenRecording)}
-            </div>
-            <div className="settings-permission-info">
-              <span className="settings-permission-name">Screen Recording</span>
-              <span className="settings-permission-status">
-                {getStatusLabel(permissions.screenRecording)}
-              </span>
-            </div>
-            {permissions.screenRecording !== 'granted' && (
-              <button 
-                className="settings-permission-btn"
-                onClick={() => handleOpenPreferences('screen-recording')}
-              >
-                Open Settings
-              </button>
-            )}
-          </div>
-
-          {/* Accessibility */}
-          <div className={`settings-permission-row ${permissions.accessibility ? 'granted' : ''}`}>
-            <div className="settings-permission-icon">
-              {getStatusIcon(permissions.accessibility)}
-            </div>
-            <div className="settings-permission-info">
-              <span className="settings-permission-name">Accessibility</span>
-              <span className="settings-permission-status">
-                {getStatusLabel(permissions.accessibility)}
-              </span>
-            </div>
-            {!permissions.accessibility && (
-              <button 
-                className="settings-permission-btn"
-                onClick={() => handleOpenPreferences('accessibility')}
-              >
-                Open Settings
-              </button>
-            )}
-          </div>
-        </div>
-
-        {!permissions.allGranted && (
+        <div className="settings-toggle-row">
+          <span className="settings-toggle-label">Show Audio Meter</span>
           <button 
-            className="settings-grant-all-btn"
-            onClick={handleRequestPermissions}
+            className={`settings-toggle ${showAudioMeter ? 'active' : ''}`}
+            onClick={onToggleAudioMeter}
+            role="switch"
+            aria-checked={showAudioMeter}
           >
-            Request All Permissions
+            <span className="settings-toggle-knob" />
           </button>
+        </div>
+      </div>
+
+      <div className={`settings-section collapsible ${expandedSections.permissions ? 'expanded' : ''}`}>
+        <button className="settings-section-header" onClick={() => toggleSection('permissions')}>
+          <h3 className="settings-section-title">Permissions</h3>
+          <ChevronIcon expanded={expandedSections.permissions} />
+        </button>
+        
+        {expandedSections.permissions && (
+          <div className="settings-section-content">
+            <p className="settings-section-desc">
+              These permissions are required for full functionality.
+            </p>
+
+            <div className="settings-permission-list">
+              <div className={`settings-permission-row ${permissions.microphone === 'granted' ? 'granted' : ''}`}>
+                <div className="settings-permission-icon">{getStatusIcon(permissions.microphone)}</div>
+                <div className="settings-permission-info">
+                  <span className="settings-permission-name">Microphone</span>
+                  <span className="settings-permission-status">{getStatusLabel(permissions.microphone)}</span>
+                </div>
+                {permissions.microphone !== 'granted' && (
+                  <button className="settings-permission-btn" onClick={() => handleOpenPreferences('microphone')}>
+                    Open Settings
+                  </button>
+                )}
+              </div>
+
+              <div className={`settings-permission-row ${permissions.screenRecording === 'granted' ? 'granted' : ''}`}>
+                <div className="settings-permission-icon">{getStatusIcon(permissions.screenRecording)}</div>
+                <div className="settings-permission-info">
+                  <span className="settings-permission-name">Screen Recording</span>
+                  <span className="settings-permission-status">{getStatusLabel(permissions.screenRecording)}</span>
+                </div>
+                {permissions.screenRecording !== 'granted' && (
+                  <button className="settings-permission-btn" onClick={() => handleOpenPreferences('screen-recording')}>
+                    Open Settings
+                  </button>
+                )}
+              </div>
+
+              <div className={`settings-permission-row ${permissions.accessibility ? 'granted' : ''}`}>
+                <div className="settings-permission-icon">{getStatusIcon(permissions.accessibility)}</div>
+                <div className="settings-permission-info">
+                  <span className="settings-permission-name">Accessibility</span>
+                  <span className="settings-permission-status">{getStatusLabel(permissions.accessibility)}</span>
+                </div>
+                {!permissions.accessibility && (
+                  <button className="settings-permission-btn" onClick={() => handleOpenPreferences('accessibility')}>
+                    Open Settings
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {!permissions.allGranted && (
+              <button className="settings-grant-all-btn" onClick={handleRequestPermissions}>
+                Request All Permissions
+              </button>
+            )}
+          </div>
         )}
       </div>
 
+      <div className={`settings-section collapsible ${expandedSections.shortcuts ? 'expanded' : ''}`}>
+        <button className="settings-section-header" onClick={() => toggleSection('shortcuts')}>
+          <h3 className="settings-section-title">Keyboard Shortcuts</h3>
+          <ChevronIcon expanded={expandedSections.shortcuts} />
+        </button>
+        
+        {expandedSections.shortcuts && (
+          <div className="settings-section-content">
+            <div className="settings-hotkeys-list">
+              <div className="settings-hotkey-row">
+                <span className="settings-hotkey-label">Show/Hide Overlay</span>
+                <div className="settings-hotkey-keys"><kbd>⌘</kbd><kbd>/</kbd></div>
+              </div>
+              <div className="settings-hotkey-row">
+                <span className="settings-hotkey-label">Toggle Transcript</span>
+                <div className="settings-hotkey-keys"><kbd>⌘</kbd><kbd>;</kbd></div>
+              </div>
+              <div className="settings-hotkey-row">
+                <span className="settings-hotkey-label">Reset Layout</span>
+                <div className="settings-hotkey-keys"><kbd>⌘</kbd><kbd>\</kbd></div>
+              </div>
+              <div className="settings-hotkey-row">
+                <span className="settings-hotkey-label">Ask AI</span>
+                <div className="settings-hotkey-keys"><kbd>⌘</kbd><kbd>↵</kbd></div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

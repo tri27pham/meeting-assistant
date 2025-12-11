@@ -2,68 +2,85 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import ControlBar from './components/ControlBar';
 import LiveInsightsPanel from './components/LiveInsightsPanel';
 import AIResponsePanel from './components/AIResponsePanel';
+import TranscriptionPanel from './components/TranscriptionPanel';
+import AudioMeterPanel from './components/AudioMeterPanel';
 import DraggablePanel from './components/DraggablePanel';
 import PermissionSetup from './components/PermissionSetup';
 import SettingsPanel from './components/SettingsPanel';
+import { useAudioCapture } from './hooks/useAudioCapture';
+import { useSTT } from './hooks/useSTT';
 
-// Panel IDs for localStorage keys
-const PANEL_IDS = ['control-bar', 'live-insights', 'ai-response', 'settings'];
+const PANEL_IDS = ['control-bar', 'live-insights', 'ai-response', 'transcription', 'settings', 'audio-meter'];
 
-// Default panel sizes
 const PANEL_SIZES = {
   liveInsights: { width: 420, height: 400 },
   aiResponse: { width: 450, height: 380 },
+  transcription: { width: 380, height: 350 },
 };
 
 function App() {
-  // Permission state - determines if we show setup or main UI
-  const [permissionsReady, setPermissionsReady] = useState(null); // null = loading, false = show setup, true = ready
+  const [permissionsReady, setPermissionsReady] = useState(null);
   const [showPermissionSetup, setShowPermissionSetup] = useState(false);
-
-  // Settings panel state
   const [showSettings, setShowSettings] = useState(false);
-
-  // Session state
-  const [isRunning, setIsRunning] = useState(true);
-  const [isPaused, setIsPaused] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
+  const [isPaused, setIsPaused] = useState(true);
   const [sessionTime, setSessionTime] = useState(0);
 
-  // Layout reset key - incrementing this forces panels to remount
-  const [layoutKey, setLayoutKey] = useState(0);
+  const {
+    isMicCapturing,
+    isSystemCapturing,
+    isCapturing,
+    isMeterOnly,
+    isMeterActive,
+    micLevel,
+    systemLevel,
+    micDB,
+    micPeak,
+    error: audioError,
+    preAuthorizeMic,
+    startMicCapture,
+    stopMicCapture,
+    startMeterOnly,
+    stopMeterOnly,
+    startSystemCapture,
+    stopSystemCapture,
+    startAllCapture,
+    stopAllCapture,
+  } = useAudioCapture();
 
-  // UI state
-  const [showTranscript, setShowTranscript] = useState(false);
+  const {
+    isEnabled: sttEnabled,
+    isReady: sttReady,
+    currentTranscript,
+    transcriptions,
+    error: sttError,
+    setApiKey: setSTTApiKey,
+    enable: enableSTT,
+    disable: disableSTT,
+    clear: clearSTT,
+  } = useSTT();
+
+  const [layoutKey, setLayoutKey] = useState(0);
+  const [showTranscript, setShowTranscript] = useState(true);
+  const [showAudioMeter, setShowAudioMeter] = useState(false);
   
-  // Calculate default positions based on screen size
   const defaultPositions = useMemo(() => {
     const screenWidth = window.innerWidth;
     const screenHeight = window.innerHeight;
-    
-    // Container has 16px padding, panels are positioned relative to content area
-    // For equal visual margins from screen edges:
-    // - Left panel: x = margin - containerPadding (to offset the padding)
-    // - Right panel: x = screenWidth - panelWidth - margin - containerPadding
     const containerPadding = 16;
-    const margin = 32; // Visual margin from screen edge
-    const topOffset = Math.floor(screenHeight * 0.10); // 10% from top (was 80px, moved down 5%)
+    const margin = 32;
+    const topOffset = Math.floor(screenHeight * 0.10);
     
     return {
-      controlBar: { 
-        x: 0, // Centered via CSS and centered prop
-        y: 16 
-      },
-      liveInsights: { 
-        x: margin - containerPadding, // 16px from container = 32px from screen
-        y: topOffset 
-      },
-      aiResponse: { 
-        x: screenWidth - PANEL_SIZES.aiResponse.width - margin - containerPadding,
-        y: topOffset 
-      },
+      controlBar: { x: 0, y: 16 },
+      liveInsights: { x: margin - containerPadding, y: topOffset },
+      aiResponse: { x: screenWidth - PANEL_SIZES.aiResponse.width - margin - containerPadding, y: topOffset },
+      transcription: { x: margin - containerPadding, y: topOffset + PANEL_SIZES.liveInsights.height + 16 },
+      settings: { x: screenWidth - PANEL_SIZES.aiResponse.width - margin - containerPadding, y: topOffset + PANEL_SIZES.aiResponse.height + 16 },
+      audioMeter: { x: margin - containerPadding + 15, y: 25 },
     };
-  }, [layoutKey]); // Recalculate when layout resets
+  }, [layoutKey]);
   
-  // Data state (received from backend)
   const [insights, setInsights] = useState({
     title: 'Discussion about news',
     summary: 'You started talking about how there\'s a lot of big startup acquisitions happening',
@@ -85,33 +102,37 @@ function App() {
     origin: 'cloud',
   });
 
-  const [transcript, setTranscript] = useState([]);
+  const [legacyTranscript, setLegacyTranscript] = useState([]);
 
-  // Timer effect
   useEffect(() => {
     let interval;
     if (isRunning && !isPaused) {
-      interval = setInterval(() => {
-        setSessionTime((prev) => prev + 1);
-      }, 1000);
+      interval = setInterval(() => setSessionTime((prev) => prev + 1), 1000);
     }
     return () => clearInterval(interval);
   }, [isRunning, isPaused]);
 
-  // Check permissions on mount
+  useEffect(() => {
+    if (audioError) console.error('[App] Audio capture error:', audioError);
+  }, [audioError]);
+
+  useEffect(() => {
+    if (showAudioMeter && !isCapturing && !isMeterOnly) {
+      startMeterOnly();
+    } else if (!showAudioMeter && isMeterOnly) {
+      stopMeterOnly();
+    }
+  }, [showAudioMeter, isCapturing, isMeterOnly, startMeterOnly, stopMeterOnly]);
+
   useEffect(() => {
     const checkPermissions = async () => {
       if (!window.cluely?.permissions) {
-        // API not available - assume ready (for development/testing)
-        console.log('[App] Permissions API not available, skipping check');
         setPermissionsReady(true);
         return;
       }
 
       try {
         const { ready, missing } = await window.cluely.permissions.isReady();
-        console.log('[App] Permission check:', { ready, missing });
-        
         if (ready) {
           setPermissionsReady(true);
           setShowPermissionSetup(false);
@@ -121,7 +142,6 @@ function App() {
         }
       } catch (error) {
         console.error('[App] Failed to check permissions:', error);
-        // On error, assume ready to not block the user
         setPermissionsReady(true);
       }
     };
@@ -129,20 +149,16 @@ function App() {
     checkPermissions();
   }, []);
 
-  // Handler for when permissions are granted
-  const handlePermissionsComplete = useCallback(() => {
+  const handlePermissionsComplete = useCallback(async () => {
+    await preAuthorizeMic();
     setPermissionsReady(true);
     setShowPermissionSetup(false);
-  }, []);
+  }, [preAuthorizeMic]);
 
-  // Handler for skipping permission setup
   const handlePermissionsSkip = useCallback(() => {
     setShowPermissionSetup(false);
-    // Note: App may have limited functionality
   }, []);
 
-  // Settings handlers
-  // Toggle settings panel (clicking icon when open will close it)
   const handleToggleSettings = useCallback(() => {
     setShowSettings(prev => !prev);
   }, []);
@@ -151,20 +167,15 @@ function App() {
     setShowSettings(false);
   }, []);
 
-  // Backend event listeners
   useEffect(() => {
     if (!window.cluely) return;
 
     const unsubTranscript = window.cluely.on.transcriptUpdate((segment) => {
-      setTranscript((prev) => [...prev, segment]);
+      setLegacyTranscript((prev) => [...prev, segment]);
     });
 
     const unsubSuggestion = window.cluely.on.suggestion((suggestion) => {
-      setAiResponse({
-        action: suggestion.type,
-        content: suggestion.text,
-        origin: suggestion.origin,
-      });
+      setAiResponse({ action: suggestion.type, content: suggestion.text, origin: suggestion.origin });
     });
 
     const unsubInsights = window.cluely.on.insightsUpdate((newInsights) => {
@@ -179,22 +190,51 @@ function App() {
       handleResetLayout();
     });
 
+    const unsubToggleTranscript = window.cluely.on?.toggleTranscript?.(() => {
+      setShowTranscript(prev => !prev);
+    });
+
     return () => {
       unsubTranscript?.();
       unsubSuggestion?.();
       unsubInsights?.();
       unsubTrigger?.();
       unsubResetLayout?.();
+      unsubToggleTranscript?.();
     };
   }, []);
 
-  // Handlers
   const handleTogglePause = useCallback(async () => {
-    if (window.cluely) {
-      await window.cluely.session.togglePause();
+    try {
+      if (isPaused) {
+        if (isMeterOnly) stopMeterOnly();
+        
+        setIsRunning(true);
+        setIsPaused(false);
+
+        try {
+          await startMicCapture();
+        } catch (err) {
+          console.error('[App] Failed to start mic capture:', err);
+        }
+        
+        await enableSTT();
+      } else {
+        setIsPaused(true);
+        stopMicCapture();
+        stopSystemCapture();
+        await disableSTT();
+        
+        if (showAudioMeter) startMeterOnly();
+      }
+
+      if (window.cluely?.session?.togglePause) {
+        await window.cluely.session.togglePause();
+      }
+    } catch (err) {
+      console.error('[App] Error in handleTogglePause:', err);
     }
-    setIsPaused((prev) => !prev);
-  }, []);
+  }, [isPaused, isMeterOnly, showAudioMeter, startMicCapture, stopMicCapture, stopMeterOnly, startMeterOnly, stopSystemCapture, enableSTT, disableSTT]);
 
   const handleAskAI = useCallback(async () => {
     if (window.cluely) {
@@ -203,9 +243,7 @@ function App() {
   }, []);
 
   const handleToggleVisibility = useCallback(() => {
-    if (window.cluely) {
-      window.cluely.window.minimize();
-    }
+    if (window.cluely) window.cluely.window.minimize();
   }, []);
 
   const handleActionSelect = useCallback(async (actionId) => {
@@ -217,28 +255,20 @@ function App() {
   }, [actions]);
 
   const handleCopyResponse = useCallback(() => {
-    if (aiResponse?.content) {
-      navigator.clipboard.writeText(aiResponse.content);
-    }
+    if (aiResponse?.content) navigator.clipboard.writeText(aiResponse.content);
   }, [aiResponse?.content]);
 
   const handleCloseResponse = useCallback(() => {
     setAiResponse(null);
   }, []);
 
-  const handleCopyInsights = useCallback(() => {
-    // Visual feedback could be added here
-  }, []);
+  const handleCopyInsights = useCallback(() => {}, []);
 
-  // Reset all panel positions and sizes
   const handleResetLayout = useCallback(() => {
-    // Clear all panel position and size data from localStorage
     PANEL_IDS.forEach((panelId) => {
       localStorage.removeItem(`cluely-panel-pos-${panelId}`);
       localStorage.removeItem(`cluely-panel-size-${panelId}`);
     });
-    
-    // Increment key to force panels to remount with default values
     setLayoutKey((prev) => prev + 1);
   }, []);
 
@@ -248,7 +278,6 @@ function App() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Show permission setup if permissions are missing
   if (showPermissionSetup) {
     return (
       <div className="overlay-container">
@@ -268,7 +297,6 @@ function App() {
     );
   }
 
-  // Show loading state while checking permissions
   if (permissionsReady === null) {
     return (
       <div className="overlay-container">
@@ -279,10 +307,8 @@ function App() {
     );
   }
 
-  // Main app UI
   return (
     <div className="overlay-container">
-      {/* Control Bar - centered at top, draggable but not resizable */}
       <DraggablePanel 
         key={`control-bar-${layoutKey}`}
         panelId="control-bar"
@@ -294,16 +320,16 @@ function App() {
         <ControlBar
           isPaused={isPaused}
           sessionTime={formatTime(sessionTime)}
+          audioLevel={micLevel}
+          isCapturing={isCapturing}
           onTogglePause={handleTogglePause}
           onAskAI={handleAskAI}
           onToggleVisibility={handleToggleVisibility}
-          onResetLayout={handleResetLayout}
           onOpenSettings={handleToggleSettings}
         />
       </DraggablePanel>
       
-      {/* Live Insights Panel - 1/4 down from top, left aligned */}
-      <DraggablePanel 
+      <DraggablePanel
         key={`live-insights-${layoutKey}`}
         panelId="live-insights"
         initialPosition={defaultPositions.liveInsights}
@@ -316,15 +342,29 @@ function App() {
           insights={insights}
           actions={actions}
           selectedAction={selectedAction}
-          showTranscript={showTranscript}
-          transcript={transcript}
-          onToggleTranscript={() => setShowTranscript(!showTranscript)}
           onActionSelect={handleActionSelect}
           onCopyInsights={handleCopyInsights}
         />
       </DraggablePanel>
-      
-      {/* AI Response Panel - 1/4 down from top, right aligned */}
+
+      {showTranscript && (
+        <DraggablePanel
+          key={`transcription-${layoutKey}`}
+          panelId="transcription"
+          initialPosition={defaultPositions.transcription}
+          initialSize={PANEL_SIZES.transcription}
+          minSize={{ width: 300, height: 200 }}
+          maxSize={{ width: 500, height: 600 }}
+          resizable={true}
+        >
+          <TranscriptionPanel
+            transcriptions={transcriptions}
+            isRecording={isCapturing && !isPaused}
+            onClear={clearSTT}
+          />
+        </DraggablePanel>
+      )}
+
       {aiResponse && (
         <DraggablePanel 
           key={`ai-response-${layoutKey}`}
@@ -343,25 +383,38 @@ function App() {
         </DraggablePanel>
       )}
       
-      {/* Settings Panel - bottom left, below live insights */}
+      {showAudioMeter && (
+        <DraggablePanel
+          key={`audio-meter-${layoutKey}`}
+          panelId="audio-meter"
+          initialPosition={defaultPositions.audioMeter}
+          resizable={false}
+          centered={false}
+          className="audio-meter-panel-wrapper"
+        >
+          <AudioMeterPanel dB={micDB} peak={micPeak} rms={micLevel} />
+        </DraggablePanel>
+      )}
+
       {showSettings && (
         <DraggablePanel
+          key={`settings-${layoutKey}`}
           panelId="settings"
-          initialPosition={{ 
-            x: 32 - 16, // Same as live insights: margin - containerPadding
-            y: window.innerHeight - 380 - 48 // Bottom with margin, fits ~380px panel
-          }}
+          initialPosition={defaultPositions.settings}
           resizable={false}
           centered={false}
           className="settings-panel-wrapper"
         >
-          <SettingsPanel onClose={handleCloseSettings} />
+          <SettingsPanel 
+            onClose={handleCloseSettings}
+            showAudioMeter={showAudioMeter}
+            onToggleAudioMeter={() => setShowAudioMeter(!showAudioMeter)}
+          />
         </DraggablePanel>
       )}
       
-      {/* Keyboard shortcuts hint */}
       <div className="shortcuts-hint">
-        <kbd>⌘</kbd><kbd>/</kbd> show/hide · <kbd>⌘</kbd><kbd>\</kbd> reset layout
+        <kbd>⌘</kbd><kbd>/</kbd> show/hide
       </div>
     </div>
   );
