@@ -6,6 +6,8 @@ const path = require('path');
 const permissionManager = require('./services/PermissionManager');
 const audioCaptureService = require('./services/AudioCaptureService');
 const sttService = require('./services/STTService');
+const aiService = require('./services/AIService');
+const contextService = require('./services/ContextService');
 
 let overlayWindow = null;
 const isDev = process.env.NODE_ENV !== 'production' || !app.isPackaged;
@@ -50,6 +52,8 @@ function createOverlayWindow() {
 
   if (isDev) {
     overlayWindow.loadURL('http://localhost:3000');
+    // Open DevTools to see renderer console logs (for debugging)
+    overlayWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
     overlayWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
   }
@@ -132,7 +136,93 @@ function setupIPC() {
   // AI handlers
   ipcMain.handle('ai:trigger-action', async (event, actionType, metadata) => {
     console.log('[Main] AI action triggered:', actionType, metadata);
+    
+    if (!aiService.isReady()) {
+      overlayWindow?.webContents.send('ai:error', { message: 'AI service not configured - missing GROQ_API_KEY' });
+      return { success: false, error: 'AI service not configured' };
+    }
+
+    try {
+      const contextSnapshot = contextService.getContextSnapshot();
+      console.log(`[Main] Context snapshot: ${contextSnapshot.segmentCount} segments, ~${contextSnapshot.tokenEstimate} tokens`);
+      
+      overlayWindow?.webContents.send('ai:stream-start', { actionType });
+      
+      for await (const data of aiService.streamResponse(actionType, contextSnapshot, { ...metadata, transcript: contextSnapshot.transcript })) {
+        overlayWindow?.webContents.send('ai:stream-chunk', { chunk: data.chunk, fullContent: data.fullContent });
+      }
+      
+      overlayWindow?.webContents.send('ai:stream-end', { actionType });
+      return { success: true };
+    } catch (error) {
+      console.error('[Main] AI error:', error.message);
+      overlayWindow?.webContents.send('ai:error', { message: error.message });
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('ai:get-state', async () => aiService.getState());
+  
+  ipcMain.handle('ai:set-api-key', async (event, apiKey) => {
+    aiService.setApiKey(apiKey);
     return { success: true };
+  });
+
+  ipcMain.handle('ai:trigger-action-test', async (event, actionType, mockContext, metadata) => {
+    console.log('[Main] AI test action triggered:', actionType, metadata);
+    
+    if (!aiService.isReady()) {
+      overlayWindow?.webContents.send('ai:error', { message: 'AI service not configured - missing GROQ_API_KEY' });
+      return { success: false, error: 'AI service not configured' };
+    }
+
+    try {
+      console.log(`[Main] Test context snapshot: ${mockContext.segmentCount} segments, ~${mockContext.tokenEstimate} tokens`);
+      
+      overlayWindow?.webContents.send('ai:stream-start', { actionType, isTest: true });
+      
+      for await (const data of aiService.streamResponse(actionType, mockContext, { ...metadata, transcript: mockContext.transcript, isTest: true })) {
+        overlayWindow?.webContents.send('ai:stream-chunk', { chunk: data.chunk, fullContent: data.fullContent });
+      }
+      
+      overlayWindow?.webContents.send('ai:stream-end', { actionType, isTest: true });
+      return { success: true };
+    } catch (error) {
+      console.error('[Main] AI test error:', error.message);
+      overlayWindow?.webContents.send('ai:error', { message: error.message });
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Context handlers
+  ipcMain.handle('context:get-snapshot', async (event, options) => contextService.getContextSnapshot(options));
+  ipcMain.handle('context:get-state', async () => contextService.getState());
+  ipcMain.handle('context:get-segments', async (event, options) => contextService.getSegments(options));
+  ipcMain.handle('context:get-key-points', async () => contextService.getKeyPoints());
+  ipcMain.handle('context:add-key-point', async (event, text, metadata) => contextService.addKeyPoint(text, metadata));
+  ipcMain.handle('context:clear', async () => contextService.clearContext());
+  ipcMain.handle('context:start-session', async () => {
+    contextService.startSession();
+    return { success: true };
+  });
+  ipcMain.handle('context:end-session', async () => {
+    const summary = contextService.endSession();
+    return { success: true, summary };
+  });
+
+  // Auto-suggest handlers
+  ipcMain.handle('context:set-auto-suggest', async (event, enabled) => {
+    contextService.setAutoSuggestEnabled(enabled);
+    return { success: true, enabled };
+  });
+  
+  ipcMain.handle('context:set-auto-suggest-config', async (event, config) => {
+    contextService.setAutoSuggestConfig(config);
+    return { success: true };
+  });
+  
+  ipcMain.handle('context:get-auto-suggest-state', async () => {
+    return contextService.getAutoSuggestState();
   });
 
   // Audio handlers
@@ -142,6 +232,7 @@ function setupIPC() {
 
   ipcMain.on('audio:raw-blob', (event, data) => {
     if (data && data.length > 0) {
+      console.log(`[Main] Audio blob received: ${data.length} bytes`);
       sttService.sendAudio(Buffer.from(data));
     }
   });
@@ -220,10 +311,20 @@ app.whenReady().then(() => {
     overlayWindow?.webContents.send('audio:level', data);
   });
 
-  // Forward STT events to renderer
+  // Forward STT events to renderer and Context Service
   sttService.on('transcription', (result) => {
     console.log('[Main] Transcription:', result.text);
+    
+    // Feed final transcriptions into Context Service
+    const segment = contextService.addTranscriptSegment({
+      text: result.text,
+      confidence: result.confidence,
+      timestamp: result.timestamp,
+      isFinal: true,
+    });
+    
     overlayWindow?.webContents.send('stt:transcription', result);
+    overlayWindow?.webContents.send('context:segment-added', segment);
   });
 
   sttService.on('interim', (result) => {
@@ -243,6 +344,60 @@ app.whenReady().then(() => {
   sttService.on('error', (error) => {
     console.error('[Main] STT error:', error.message);
     overlayWindow?.webContents.send('stt:error', { message: error.message });
+  });
+
+  // Forward utterance-end to Context Service for pause detection
+  sttService.on('utterance-end', () => {
+    contextService.onUtteranceEnd();
+  });
+
+  // Forward Context Service events to renderer
+  contextService.on('session-started', (data) => {
+    overlayWindow?.webContents.send('context:session-started', data);
+  });
+
+  contextService.on('session-ended', (data) => {
+    overlayWindow?.webContents.send('context:session-ended', data);
+  });
+
+  contextService.on('key-point-extracted', (keyPoint) => {
+    console.log('[Main] Key point extracted:', keyPoint.preview.substring(0, 50));
+    overlayWindow?.webContents.send('context:key-point', keyPoint);
+  });
+
+  contextService.on('context-cleared', (data) => {
+    overlayWindow?.webContents.send('context:cleared', data);
+  });
+
+  // Handle auto-suggestions from Context Service
+  contextService.on('auto-suggest', async (request) => {
+    if (!aiService.isReady()) {
+      console.log('[Main] Auto-suggest skipped - AI service not ready');
+      contextService.markSuggestionFailed();
+      return;
+    }
+
+    try {
+      console.log(`[Main] 🤖 Auto-suggestion: ${request.type} (${request.triggerType})`);
+      overlayWindow?.webContents.send('ai:auto-suggest-start', { 
+        type: request.type, 
+        triggerType: request.triggerType,
+        reason: request.reason 
+      });
+      
+      overlayWindow?.webContents.send('ai:stream-start', { actionType: request.type, isAutoSuggest: true });
+      
+      for await (const data of aiService.streamResponse(request.type, request.context, { isAutoSuggest: true })) {
+        overlayWindow?.webContents.send('ai:stream-chunk', { chunk: data.chunk, fullContent: data.fullContent });
+      }
+      
+      overlayWindow?.webContents.send('ai:stream-end', { actionType: request.type, isAutoSuggest: true });
+      contextService.markSuggestionComplete();
+    } catch (error) {
+      console.error('[Main] Auto-suggest error:', error.message);
+      overlayWindow?.webContents.send('ai:error', { message: error.message });
+      contextService.markSuggestionFailed();
+    }
   });
 
   app.on('activate', () => {

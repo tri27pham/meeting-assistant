@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import ControlBar from './components/ControlBar';
 import LiveInsightsPanel from './components/LiveInsightsPanel';
 import AIResponsePanel from './components/AIResponsePanel';
@@ -9,6 +9,7 @@ import PermissionSetup from './components/PermissionSetup';
 import SettingsPanel from './components/SettingsPanel';
 import { useAudioCapture } from './hooks/useAudioCapture';
 import { useSTT } from './hooks/useSTT';
+import { useContext } from './hooks/useContext';
 
 const PANEL_IDS = ['control-bar', 'live-insights', 'ai-response', 'transcription', 'settings', 'audio-meter'];
 
@@ -19,6 +20,13 @@ const PANEL_SIZES = {
 };
 
 function App() {
+  // Version check log - remove after verification
+  useEffect(() => {
+    console.log('[App] ✅ Latest code loaded - Version check:', new Date().toISOString());
+    console.log('[App] ✅ Improved LLM prompts: ACTIVE (no filtering needed)');
+    console.log('[App] ✅ AI Response Panel safety checks: ACTIVE');
+  }, []);
+
   const [permissionsReady, setPermissionsReady] = useState(null);
   const [showPermissionSetup, setShowPermissionSetup] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -60,6 +68,21 @@ function App() {
     clear: clearSTT,
   } = useSTT();
 
+  const {
+    isSessionActive,
+    segmentCount,
+    keyPointCount,
+    sessionDuration,
+    segments: contextSegments,
+    keyPoints,
+    recentTranscript,
+    autoSuggestEnabled,
+    startSession,
+    endSession,
+    clearContext,
+    setAutoSuggest,
+  } = useContext();
+
   const [layoutKey, setLayoutKey] = useState(0);
   const [showTranscript, setShowTranscript] = useState(true);
   const [showAudioMeter, setShowAudioMeter] = useState(false);
@@ -95,12 +118,33 @@ function App() {
   ]);
 
   const [selectedAction, setSelectedAction] = useState(2);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
   
-  const [aiResponse, setAiResponse] = useState({
-    action: 'Search the web for information...',
-    content: `On July 14, 2025, Cognition acquired the remainder of Windsurf to integrate into its Devin platform\n\nIncludes Windsurf's agentic IDE, IP, brand, $82 M ARR, 350+ enterprise clients, and full team`,
-    origin: 'cloud',
-  });
+  const [aiResponse, setAiResponse] = useState(null);
+  const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
+  const isTestResponseRef = useRef(false);
+  const isAutoSuggestRef = useRef(false);
+
+  // Debug: Track when aiResponse changes
+  useEffect(() => {
+    if (aiResponse === null) {
+      console.log('[App] 🔴 AI Response cleared/null');
+    } else {
+      console.log('[App] 🟢 AI Response set:', {
+        hasContent: !!aiResponse.content,
+        contentLength: aiResponse.content?.length || 0,
+        isStreaming: aiResponse.isStreaming,
+        action: aiResponse.action
+      });
+    }
+  }, [aiResponse]);
+
+  // Debug: Track when waiting state changes
+  useEffect(() => {
+    console.log('[App] ⏳ isWaitingForResponse:', isWaitingForResponse);
+  }, [isWaitingForResponse]);
+
 
   const [legacyTranscript, setLegacyTranscript] = useState([]);
 
@@ -175,7 +219,9 @@ function App() {
     });
 
     const unsubSuggestion = window.cluely.on.suggestion((suggestion) => {
-      setAiResponse({ action: suggestion.type, content: suggestion.text, origin: suggestion.origin });
+      if (suggestion.text && suggestion.text.trim()) {
+        setAiResponse({ action: suggestion.type, content: suggestion.text, origin: suggestion.origin, isCleared: false });
+      }
     });
 
     const unsubInsights = window.cluely.on.insightsUpdate((newInsights) => {
@@ -183,26 +229,133 @@ function App() {
     });
 
     const unsubTrigger = window.cluely.on.triggerAISuggestion(() => {
-      handleAskAI();
+      // Use window.cluely directly to avoid dependency on handleAskAI
+      if (window.cluely?.ai) {
+        window.cluely.ai.triggerAction('manual', { timestamp: Date.now() });
+      }
     });
 
     const unsubResetLayout = window.cluely.on?.resetLayout?.(() => {
-      handleResetLayout();
+      // Reset layout - clear panel positions from localStorage
+      PANEL_IDS.forEach((panelId) => {
+        localStorage.removeItem(`cluely-panel-pos-${panelId}`);
+        localStorage.removeItem(`cluely-panel-size-${panelId}`);
+      });
+      // Force remount by updating layout key
+      setLayoutKey((prev) => prev + 1);
     });
 
     const unsubToggleTranscript = window.cluely.on?.toggleTranscript?.(() => {
       setShowTranscript(prev => !prev);
     });
 
-    return () => {
+    const unsubAiStreamStart = window.cluely.on?.aiStreamStart?.((data) => {
+      const isTest = data.isTest === true;
+      const isAutoSuggest = data.isAutoSuggest === true;
+      isTestResponseRef.current = isTest;
+      isAutoSuggestRef.current = isAutoSuggest;
+      setIsAiLoading(true);
+      setAiError(null);
+      
+      // Only show waiting state for real (non-test) responses
+      // For auto-suggestions, only show if there's context
+      // For manual requests, always show (user explicitly requested)
+      if (!isTest) {
+        if (isAutoSuggest && segmentCount === 0) {
+          // Auto-suggest with no context - don't show generic responses
+          setIsWaitingForResponse(false);
+        } else {
+          // Manual request or auto-suggest with context - show waiting state
+          setIsWaitingForResponse(true);
+        }
+        // Don't set aiResponse yet - wait for actual content
+      } else {
+        // For test responses, don't show anything
+        setIsWaitingForResponse(false);
+      }
+    });
+
+    const unsubAiStreamChunk = window.cluely.on?.aiStreamChunk?.((data) => {
+      try {
+        // Only set response if it's not a test
+        if (isTestResponseRef.current) {
+          // Ignore test responses - don't show them
+          return;
+        }
+        
+        // For auto-suggestions with no context, don't show generic responses
+        if (isAutoSuggestRef.current && segmentCount === 0) {
+          console.log('[App] Auto-suggest response with no context - not showing');
+          return;
+        }
+        
+        // For real responses, set the response when we get content
+        if (data && data.fullContent && typeof data.fullContent === 'string' && data.fullContent.trim()) {
+          setIsWaitingForResponse(false);
+          setAiResponse(prev => prev 
+            ? { ...prev, content: data.fullContent, isStreaming: true, action: prev.action || 'Response', isCleared: false }
+            : { action: 'Response', content: data.fullContent, origin: 'groq', isStreaming: true, isCleared: false }
+          );
+        }
+      } catch (error) {
+        console.error('[App] Error in aiStreamChunk handler:', error);
+      }
+    });
+
+    const unsubAiStreamEnd = window.cluely.on?.aiStreamEnd?.(() => {
+      try {
+        setIsAiLoading(false);
+        setIsWaitingForResponse(false);
+        
+        if (isTestResponseRef.current) {
+          // Clear test response state
+          isTestResponseRef.current = false;
+          return;
+        }
+        
+      setAiResponse(prev => {
+        if (!prev) return null;
+        // If there's no content after streaming ends, clear the response
+        if (!prev.content || typeof prev.content !== 'string' || prev.content.trim() === '') {
+          return null;
+        }
+        return { ...prev, isStreaming: false, isCleared: false };
+      });
+        isTestResponseRef.current = false;
+        isAutoSuggestRef.current = false;
+      } catch (error) {
+        console.error('[App] Error in aiStreamEnd handler:', error);
+        setIsAiLoading(false);
+        setIsWaitingForResponse(false);
+        isAutoSuggestRef.current = false;
+      }
+    });
+
+    const unsubAiError = window.cluely.on?.aiError?.((data) => {
+      setIsAiLoading(false);
+      setIsWaitingForResponse(false);
+      setAiError(data.message);
+      // Only show errors for real responses (not tests)
+      if (!isTestResponseRef.current) {
+        setAiResponse({ action: 'Error', content: data.message, origin: 'error', isStreaming: false, isCleared: false });
+      }
+      isTestResponseRef.current = false;
+      isAutoSuggestRef.current = false;
+    });
+
+      return () => {
       unsubTranscript?.();
       unsubSuggestion?.();
       unsubInsights?.();
       unsubTrigger?.();
       unsubResetLayout?.();
       unsubToggleTranscript?.();
+      unsubAiStreamStart?.();
+      unsubAiStreamChunk?.();
+      unsubAiStreamEnd?.();
+      unsubAiError?.();
     };
-  }, []);
+  }, [segmentCount]);
 
   const handleTogglePause = useCallback(async () => {
     try {
@@ -211,6 +364,8 @@ function App() {
         
         setIsRunning(true);
         setIsPaused(false);
+
+        await startSession();
 
         try {
           await startMicCapture();
@@ -234,12 +389,53 @@ function App() {
     } catch (err) {
       console.error('[App] Error in handleTogglePause:', err);
     }
-  }, [isPaused, isMeterOnly, showAudioMeter, startMicCapture, stopMicCapture, stopMeterOnly, startMeterOnly, stopSystemCapture, enableSTT, disableSTT]);
+  }, [isPaused, isMeterOnly, showAudioMeter, startMicCapture, stopMicCapture, stopMeterOnly, startMeterOnly, stopSystemCapture, enableSTT, disableSTT, startSession]);
 
   const handleAskAI = useCallback(async () => {
     if (window.cluely) {
       await window.cluely.ai.triggerAction('manual', { timestamp: Date.now() });
     }
+  }, []);
+
+  const handleTestAI = useCallback(async () => {
+    if (!window.cluely?.ai) return;
+
+    // Create a mock context snapshot in the same format as ContextService
+    const mockTranscript = "We're discussing the latest developments in AI technology. The conversation has been about machine learning models and their applications in various industries. There's been talk about how companies are integrating AI into their workflows.";
+    
+    const now = Date.now();
+    const mockSegments = mockTranscript.split('. ').filter(s => s.trim()).map((text, i) => ({
+      id: `test_seg_${i}`,
+      text: text.trim() + (text.endsWith('.') ? '' : '.'),
+      confidence: 0.95,
+      timestamp: now - (mockTranscript.split('. ').length - i) * 5000,
+      isFinal: true,
+      speaker: 'unknown',
+      wordCount: text.split(/\s+/).length,
+    }));
+
+    const mockContextSnapshot = {
+      transcript: mockTranscript,
+      segments: mockSegments,
+      segmentCount: mockSegments.length,
+      totalSegments: mockSegments.length,
+      tokenEstimate: Math.ceil(mockTranscript.split(/\s+/).length * 1.3),
+      timeRange: {
+        start: mockSegments[0]?.timestamp || now,
+        end: mockSegments[mockSegments.length - 1]?.timestamp || now,
+        duration: (mockSegments.length - 1) * 5000,
+      },
+      sessionActive: true,
+      sessionDuration: mockSegments.length * 5000,
+    };
+
+    console.log('[App] Test AI with mock context:', mockContextSnapshot);
+    
+    // Trigger AI with talking_points action using test method
+    await window.cluely.ai.triggerActionTest('talking_points', mockContextSnapshot, { 
+      timestamp: Date.now(),
+      isTest: true,
+    });
   }, []);
 
   const handleToggleVisibility = useCallback(() => {
@@ -260,7 +456,26 @@ function App() {
 
   const handleCloseResponse = useCallback(() => {
     setAiResponse(null);
+    setIsWaitingForResponse(false);
   }, []);
+
+  const handleClearResponse = useCallback(() => {
+    if (aiResponse && aiResponse.content && aiResponse.content.trim()) {
+      // Clear content but keep the panel open by maintaining the response object
+      // Only set isCleared if there was actual content to clear
+      setAiResponse({
+        ...aiResponse,
+        content: '',
+        action: aiResponse.action || 'Response',
+        isStreaming: false,
+        isCleared: true, // Flag to indicate content was cleared
+      });
+    } else {
+      // If there's no content, just close the panel
+      setAiResponse(null);
+    }
+    setIsWaitingForResponse(false);
+  }, [aiResponse]);
 
   const handleCopyInsights = useCallback(() => {}, []);
 
@@ -324,6 +539,7 @@ function App() {
           isCapturing={isCapturing}
           onTogglePause={handleTogglePause}
           onAskAI={handleAskAI}
+          onTestAI={handleTestAI}
           onToggleVisibility={handleToggleVisibility}
           onOpenSettings={handleToggleSettings}
         />
@@ -344,6 +560,8 @@ function App() {
           selectedAction={selectedAction}
           onActionSelect={handleActionSelect}
           onCopyInsights={handleCopyInsights}
+          contextState={{ segmentCount, keyPointCount, sessionDuration }}
+          isRecording={isCapturing && !isPaused}
         />
       </DraggablePanel>
 
@@ -365,7 +583,38 @@ function App() {
         </DraggablePanel>
       )}
 
-      {aiResponse && (
+      {(() => {
+        // Show panel only if:
+        // 1. Waiting for a response, OR
+        // 2. Has actual content (not empty), OR
+        // 3. Is currently streaming, OR
+        // 4. Was explicitly cleared (isCleared flag means there WAS content that was cleared)
+        const hasContent = aiResponse?.content && typeof aiResponse.content === 'string' && aiResponse.content.trim().length > 0;
+        const shouldShow = isWaitingForResponse || 
+          (aiResponse && typeof aiResponse === 'object' && (
+            hasContent || 
+            aiResponse.isStreaming || 
+            aiResponse.isCleared // If cleared, there was content before, so keep panel open
+          ));
+        
+        // Don't show panel on initial load if there's no real activity
+        // Only show if we're actively waiting, have content, or explicitly cleared
+        if (shouldShow && !isWaitingForResponse && !hasContent && !aiResponse?.isStreaming && !aiResponse?.isCleared) {
+          return false;
+        }
+        
+        if (shouldShow) {
+          console.log('[App] 🎯 AI Response Panel should show:', {
+            isWaitingForResponse,
+            hasAiResponse: !!aiResponse,
+            hasContent,
+            aiResponseContent: aiResponse?.content?.substring(0, 50),
+            aiResponseIsStreaming: aiResponse?.isStreaming,
+            isCleared: aiResponse?.isCleared
+          });
+        }
+        return shouldShow;
+      })() && (
         <DraggablePanel 
           key={`ai-response-${layoutKey}`}
           panelId="ai-response"
@@ -376,8 +625,19 @@ function App() {
           resizable={true}
         >
           <AIResponsePanel
-            response={aiResponse}
+            response={isWaitingForResponse && !aiResponse 
+              ? { action: 'Waiting...', content: '', origin: 'groq', isStreaming: true, isWaiting: true }
+              : (aiResponse && typeof aiResponse === 'object' 
+                  ? { 
+                      action: aiResponse.action || 'Response', 
+                      content: aiResponse.content || '', 
+                      origin: aiResponse.origin || 'groq', 
+                      isStreaming: aiResponse.isStreaming || false,
+                      isWaiting: aiResponse.isWaiting || false
+                    }
+                  : { action: 'Response', content: '', origin: 'groq', isStreaming: false })}
             onCopy={handleCopyResponse}
+            onClear={handleClearResponse}
             onClose={handleCloseResponse}
           />
         </DraggablePanel>
@@ -409,6 +669,8 @@ function App() {
             onClose={handleCloseSettings}
             showAudioMeter={showAudioMeter}
             onToggleAudioMeter={() => setShowAudioMeter(!showAudioMeter)}
+            autoSuggestEnabled={autoSuggestEnabled}
+            onToggleAutoSuggest={() => setAutoSuggest(!autoSuggestEnabled)}
           />
         </DraggablePanel>
       )}

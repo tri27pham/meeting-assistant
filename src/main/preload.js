@@ -38,6 +38,23 @@ contextBridge.exposeInMainWorld('cluely', {
 
   ai: {
     triggerAction: (actionType, metadata) => ipcRenderer.invoke('ai:trigger-action', actionType, metadata),
+    triggerActionTest: (actionType, mockContext, metadata) => ipcRenderer.invoke('ai:trigger-action-test', actionType, mockContext, metadata),
+    getState: () => ipcRenderer.invoke('ai:get-state'),
+    setApiKey: (apiKey) => ipcRenderer.invoke('ai:set-api-key', apiKey),
+  },
+
+  context: {
+    getSnapshot: (options) => ipcRenderer.invoke('context:get-snapshot', options),
+    getState: () => ipcRenderer.invoke('context:get-state'),
+    getSegments: (options) => ipcRenderer.invoke('context:get-segments', options),
+    getKeyPoints: () => ipcRenderer.invoke('context:get-key-points'),
+    addKeyPoint: (text, metadata) => ipcRenderer.invoke('context:add-key-point', text, metadata),
+    clear: () => ipcRenderer.invoke('context:clear'),
+    startSession: () => ipcRenderer.invoke('context:start-session'),
+    endSession: () => ipcRenderer.invoke('context:end-session'),
+    setAutoSuggest: (enabled) => ipcRenderer.invoke('context:set-auto-suggest', enabled),
+    setAutoSuggestConfig: (config) => ipcRenderer.invoke('context:set-auto-suggest-config', config),
+    getAutoSuggestState: () => ipcRenderer.invoke('context:get-auto-suggest-state'),
   },
 
   window: {
@@ -115,6 +132,46 @@ contextBridge.exposeInMainWorld('cluely', {
     audioLevel: (callback) => {
       ipcRenderer.on('audio:level', (event, data) => callback(data));
       return () => ipcRenderer.removeAllListeners('audio:level');
+    },
+    aiStreamStart: (callback) => {
+      ipcRenderer.on('ai:stream-start', (event, data) => callback(data));
+      return () => ipcRenderer.removeAllListeners('ai:stream-start');
+    },
+    aiStreamChunk: (callback) => {
+      ipcRenderer.on('ai:stream-chunk', (event, data) => callback(data));
+      return () => ipcRenderer.removeAllListeners('ai:stream-chunk');
+    },
+    aiStreamEnd: (callback) => {
+      ipcRenderer.on('ai:stream-end', (event, data) => callback(data));
+      return () => ipcRenderer.removeAllListeners('ai:stream-end');
+    },
+    aiError: (callback) => {
+      ipcRenderer.on('ai:error', (event, data) => callback(data));
+      return () => ipcRenderer.removeAllListeners('ai:error');
+    },
+    contextSegmentAdded: (callback) => {
+      ipcRenderer.on('context:segment-added', (event, segment) => callback(segment));
+      return () => ipcRenderer.removeAllListeners('context:segment-added');
+    },
+    contextSessionStarted: (callback) => {
+      ipcRenderer.on('context:session-started', (event, data) => callback(data));
+      return () => ipcRenderer.removeAllListeners('context:session-started');
+    },
+    contextSessionEnded: (callback) => {
+      ipcRenderer.on('context:session-ended', (event, data) => callback(data));
+      return () => ipcRenderer.removeAllListeners('context:session-ended');
+    },
+    contextKeyPoint: (callback) => {
+      ipcRenderer.on('context:key-point', (event, keyPoint) => callback(keyPoint));
+      return () => ipcRenderer.removeAllListeners('context:key-point');
+    },
+    contextCleared: (callback) => {
+      ipcRenderer.on('context:cleared', (event, data) => callback(data));
+      return () => ipcRenderer.removeAllListeners('context:cleared');
+    },
+    aiAutoSuggestStart: (callback) => {
+      ipcRenderer.on('ai:auto-suggest-start', (event, data) => callback(data));
+      return () => ipcRenderer.removeAllListeners('ai:auto-suggest-start');
     },
   },
 });

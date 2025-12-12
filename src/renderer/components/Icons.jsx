@@ -394,3 +394,37 @@ export function MeterIcon({ className = '' }) {
     </svg>
   );
 }
+
+// Microphone icon
+export function MicIcon({ className = '' }) {
+  return (
+    <svg 
+      className={className}
+      width="16" 
+      height="16" 
+      viewBox="0 0 16 16" 
+      fill="none" 
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <rect x="5" y="1" width="6" height="9" rx="3" stroke="currentColor" strokeWidth="1.5"/>
+      <path d="M3 7v1a5 5 0 0010 0V7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      <path d="M8 13v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+// Clear/Trash icon
+export function ClearIcon({ className = '' }) {
+  return (
+    <svg 
+      className={className}
+      width="16" 
+      height="16" 
+      viewBox="0 0 16 16" 
+      fill="none" 
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M3 4H13M5 4V3C5 2.45 5.45 2 6 2H10C10.55 2 11 2.45 11 3V4M6 7.5V11.5M10 7.5V11.5M4 4L5 13C5 13.55 5.45 14 6 14H10C10.55 14 11 13.55 11 13L12 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}

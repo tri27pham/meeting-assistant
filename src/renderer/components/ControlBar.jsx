@@ -10,6 +10,7 @@ function ControlBar({
   onAskAI, 
   onToggleVisibility,
   onOpenSettings,
+  onTestAI,
 }) {
   // Scale audio level for visualization (0-1 range, boost low values)
   const scaledLevel = Math.min(1, audioLevel * 3);
@@ -62,6 +63,11 @@ function ControlBar({
         <span>Ask AI</span>
         <kbd className="shortcut">⌘</kbd>
         <kbd className="shortcut">↵</kbd>
+      </button>
+
+      {/* Test AI Button */}
+      <button className="control-btn test-ai-btn" onClick={onTestAI} title="Test AI with sample transcript">
+        <span>Test</span>
       </button>
 
       <div className="control-divider" />

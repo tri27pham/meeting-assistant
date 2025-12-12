@@ -49,7 +49,7 @@ function getStatusLabel(status) {
   return 'Unknown';
 }
 
-function SettingsPanel({ onClose, showAudioMeter, onToggleAudioMeter }) {
+function SettingsPanel({ onClose, showAudioMeter, onToggleAudioMeter, autoSuggestEnabled, onToggleAutoSuggest }) {
   const [permissions, setPermissions] = useState({
     microphone: 'not-determined',
     screenRecording: 'not-determined',
@@ -102,6 +102,25 @@ function SettingsPanel({ onClose, showAudioMeter, onToggleAudioMeter }) {
       </div>
 
       <div className="settings-section">
+        <h3 className="settings-section-title" style={{ marginBottom: '12px' }}>AI Assistant</h3>
+        <div className="settings-toggle-row">
+          <div className="settings-toggle-info">
+            <span className="settings-toggle-label">Auto Suggestions</span>
+            <span className="settings-toggle-desc">Automatically suggest talking points during conversations</span>
+          </div>
+          <button 
+            className={`settings-toggle ${autoSuggestEnabled ? 'active' : ''}`}
+            onClick={onToggleAutoSuggest}
+            role="switch"
+            aria-checked={autoSuggestEnabled}
+          >
+            <span className="settings-toggle-knob" />
+          </button>
+        </div>
+      </div>
+
+      <div className="settings-section">
+        <h3 className="settings-section-title" style={{ marginBottom: '12px' }}>Display</h3>
         <div className="settings-toggle-row">
           <span className="settings-toggle-label">Show Audio Meter</span>
           <button 
