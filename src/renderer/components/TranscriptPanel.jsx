@@ -1,12 +1,10 @@
 import React from 'react';
-import { TranscriptIcon } from './Icons';
 
 function TranscriptPanel() {
   return (
     <div className="transcript-panel glass-panel">
       <div className="panel-header">
         <div className="panel-title">
-          <TranscriptIcon className="title-icon" />
           <span>Live transcript</span>
         </div>
         <div className="panel-actions">

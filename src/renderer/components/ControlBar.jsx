@@ -1,5 +1,5 @@
 import React from 'react';
-import { PauseIcon, PlayIcon, WaveformIcon } from './Icons';
+import { PauseIcon, PlayIcon, WaveformIcon, SettingsIcon } from './Icons';
 
 function ControlBar({ 
   isPaused, 
@@ -7,7 +7,8 @@ function ControlBar({
   onTogglePause, 
   onAskAI, 
   onToggleVisibility,
-  onResetLayout 
+  onResetLayout,
+  onOpenSettings
 }) {
   return (
     <div className="control-bar glass-panel">
@@ -59,6 +60,18 @@ function ControlBar({
         <span>Reset</span>
         <kbd className="shortcut">⌘</kbd>
         <kbd className="shortcut">\</kbd>
+      </button>
+
+      <div className="control-divider" />
+
+      {/* Settings */}
+      <button 
+        className="control-btn settings-btn" 
+        onClick={onOpenSettings}
+        title="Settings"
+      >
+        <SettingsIcon />
+        <span>Settings</span>
       </button>
     </div>
   );

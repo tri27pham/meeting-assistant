@@ -351,3 +351,27 @@ export function ResetIcon({ className = '' }) {
     </svg>
   );
 }
+
+export function SettingsIcon({ className = '' }) {
+  return (
+    <svg 
+      className={className} 
+      width="16" 
+      height="16" 
+      viewBox="0 0 16 16" 
+      fill="none" 
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path 
+        d="M8 1.5L8.8 3.2L10.5 2.8L11.2 4.5L13 4.2L12.5 6L14.2 6.8L12.8 8.2L14.2 9.2L12.5 10L13 11.8L11.2 11.5L10.5 13.2L8.8 12.8L8 14.5L7.2 12.8L5.5 13.2L4.8 11.5L3 11.8L3.5 10L1.8 9.2L3.2 8.2L1.8 6.8L3.5 6L3 4.2L4.8 4.5L5.5 2.8L7.2 3.2L8 1.5Z" 
+        stroke="currentColor" 
+        strokeWidth="1.5" 
+        strokeLinecap="round" 
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
+      <circle cx="8" cy="8" r="1" fill="currentColor" />
+    </svg>
+  );
+}

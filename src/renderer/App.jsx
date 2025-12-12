@@ -3,10 +3,11 @@ import ControlBar from './components/ControlBar';
 import LiveInsightsPanel from './components/LiveInsightsPanel';
 import AIResponsePanel from './components/AIResponsePanel';
 import TranscriptPanel from './components/TranscriptPanel';
+import SettingsPanel from './components/SettingsPanel';
 import DraggablePanel from './components/DraggablePanel';
 
 // Panel IDs for localStorage keys
-const PANEL_IDS = ['control-bar', 'live-insights', 'ai-response', 'transcript'];
+const PANEL_IDS = ['control-bar', 'live-insights', 'ai-response', 'transcript', 'settings'];
 
 // Default panel sizes
 const PANEL_SIZES = {
@@ -26,6 +27,7 @@ function App() {
 
   // UI state
   const [showTranscript, setShowTranscript] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   
   // Calculate default positions based on screen size
   const defaultPositions = useMemo(() => {
@@ -56,6 +58,10 @@ function App() {
       transcript: {
         x: margin - containerPadding,
         y: topOffset + PANEL_SIZES.liveInsights.height + 16,
+      },
+      settings: {
+        x: screenWidth - 400 - margin - containerPadding,
+        y: topOffset + PANEL_SIZES.aiResponse.height + 16,
       },
     };
   }, [layoutKey]); // Recalculate when layout resets
@@ -174,6 +180,14 @@ function App() {
     // Visual feedback could be added here
   }, []);
 
+  const handleToggleSettings = useCallback(() => {
+    setShowSettings((prev) => !prev);
+  }, []);
+
+  const handleCloseSettings = useCallback(() => {
+    setShowSettings(false);
+  }, []);
+
   // Reset all panel positions and sizes
   const handleResetLayout = useCallback(() => {
     // Clear all panel position and size data from localStorage
@@ -210,6 +224,7 @@ function App() {
           onAskAI={handleAskAI}
           onToggleVisibility={handleToggleVisibility}
           onResetLayout={handleResetLayout}
+          onOpenSettings={handleToggleSettings}
         />
       </DraggablePanel>
       
@@ -266,6 +281,21 @@ function App() {
       >
         <TranscriptPanel />
       </DraggablePanel>
+
+      {/* Settings Panel - below AI response, right aligned */}
+      {showSettings && (
+        <DraggablePanel
+          key={`settings-${layoutKey}`}
+          panelId="settings"
+          initialPosition={defaultPositions.settings}
+          initialSize={{ width: 400, height: 350 }}
+          minSize={{ width: 320, height: 280 }}
+          maxSize={{ width: 600, height: 700 }}
+          resizable={true}
+        >
+          <SettingsPanel onClose={handleCloseSettings} />
+        </DraggablePanel>
+      )}
       
       {/* Keyboard shortcuts hint */}
       <div className="shortcuts-hint">
