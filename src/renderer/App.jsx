@@ -2,15 +2,17 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import ControlBar from './components/ControlBar';
 import LiveInsightsPanel from './components/LiveInsightsPanel';
 import AIResponsePanel from './components/AIResponsePanel';
+import TranscriptPanel from './components/TranscriptPanel';
 import DraggablePanel from './components/DraggablePanel';
 
 // Panel IDs for localStorage keys
-const PANEL_IDS = ['control-bar', 'live-insights', 'ai-response'];
+const PANEL_IDS = ['control-bar', 'live-insights', 'ai-response', 'transcript'];
 
 // Default panel sizes
 const PANEL_SIZES = {
   liveInsights: { width: 420, height: 400 },
   aiResponse: { width: 450, height: 380 },
+  transcript: { width: 380, height: 350 },
 };
 
 function App() {
@@ -50,6 +52,10 @@ function App() {
       aiResponse: { 
         x: screenWidth - PANEL_SIZES.aiResponse.width - margin - containerPadding,
         y: topOffset 
+      },
+      transcript: {
+        x: margin - containerPadding,
+        y: topOffset + PANEL_SIZES.liveInsights.height + 16,
       },
     };
   }, [layoutKey]); // Recalculate when layout resets
@@ -247,6 +253,19 @@ function App() {
           />
         </DraggablePanel>
       )}
+
+      {/* Transcript Panel - below live insights, left aligned */}
+      <DraggablePanel
+        key={`transcript-${layoutKey}`}
+        panelId="transcript"
+        initialPosition={defaultPositions.transcript}
+        initialSize={PANEL_SIZES.transcript}
+        minSize={{ width: 300, height: 200 }}
+        maxSize={{ width: 500, height: 600 }}
+        resizable={true}
+      >
+        <TranscriptPanel />
+      </DraggablePanel>
       
       {/* Keyboard shortcuts hint */}
       <div className="shortcuts-hint">
