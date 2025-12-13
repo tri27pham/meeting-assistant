@@ -141,11 +141,25 @@ function App() {
     });
 
     const unsubTrigger = window.cluely.on.triggerAISuggestion(() => {
-      handleAskAI();
+      setShowAiResponse((prev) => {
+        const newValue = !prev;
+        if (newValue && window.cluely) {
+          window.cluely.ai.triggerAction("manual", {
+            timestamp: Date.now(),
+          }).catch((err) => {
+            console.error("[App] Error triggering AI action:", err);
+          });
+        }
+        return newValue;
+      });
     });
 
     const unsubResetLayout = window.cluely.on?.resetLayout?.(() => {
-      handleResetLayout();
+      PANEL_IDS.forEach((panelId) => {
+        localStorage.removeItem(`cluely-panel-pos-${panelId}`);
+        localStorage.removeItem(`cluely-panel-size-${panelId}`);
+      });
+      setLayoutKey((prev) => prev + 1);
     });
 
     const unsubToggleTranscript = window.cluely.on?.toggleTranscript?.(() => {
@@ -176,12 +190,19 @@ function App() {
   const handleAskAI = useCallback(async () => {
     if (showAiResponse) {
       setShowAiResponse(false);
+      if (window.cluely?.window?.mouseLeavePanel) {
+        window.cluely.window.mouseLeavePanel();
+      }
     } else {
       setShowAiResponse(true);
       if (window.cluely) {
-        await window.cluely.ai.triggerAction("manual", {
-          timestamp: Date.now(),
-        });
+        try {
+          await window.cluely.ai.triggerAction("manual", {
+            timestamp: Date.now(),
+          });
+        } catch (err) {
+          console.error("[App] Error triggering AI action:", err);
+        }
       }
     }
   }, [showAiResponse]);
@@ -214,6 +235,9 @@ function App() {
   const handleCloseResponse = useCallback(() => {
     setAiResponse(null);
     setShowAiResponse(false);
+    if (window.cluely?.window?.mouseLeavePanel) {
+      window.cluely.window.mouseLeavePanel();
+    }
   }, []);
 
   const handleCopyInsights = useCallback(() => {}, []);

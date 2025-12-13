@@ -76,17 +76,6 @@ function registerHotkeys() {
     }
   });
 
-  // Toggle overlay visibility: Cmd+Shift+\ (alternative)
-  globalShortcut.register("CommandOrControl+Shift+\\", () => {
-    if (overlayWindow) {
-      if (overlayWindow.isVisible()) {
-        overlayWindow.hide();
-      } else {
-        overlayWindow.show();
-      }
-    }
-  });
-
   // Manual AI suggestion trigger: Cmd+Enter
   globalShortcut.register("CommandOrControl+Return", () => {
     if (overlayWindow) {
