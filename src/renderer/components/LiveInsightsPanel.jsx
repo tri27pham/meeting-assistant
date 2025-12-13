@@ -1,7 +1,6 @@
 import React from "react";
 import {
   SparkleIcon,
-  TranscriptIcon,
   CopyIcon,
   BookIcon,
   GlobeIcon,
@@ -12,9 +11,6 @@ function LiveInsightsPanel({
   insights,
   actions,
   selectedAction,
-  showTranscript,
-  transcript,
-  onToggleTranscript,
   onActionSelect,
   onCopyInsights,
 }) {
@@ -49,16 +45,6 @@ function LiveInsightsPanel({
         </div>
         <div className="panel-actions">
           <button
-            className="header-btn"
-            onClick={onToggleTranscript}
-            aria-pressed={showTranscript}
-          >
-            <TranscriptIcon />
-            <span>
-              {showTranscript ? "Hide transcript" : "Show transcript"}
-            </span>
-          </button>
-          <button
             className="header-btn icon-only"
             onClick={handleCopy}
             aria-label="Copy insights"
@@ -68,59 +54,32 @@ function LiveInsightsPanel({
         </div>
       </div>
 
-      {/* Content - Transcript or Insights */}
-      {showTranscript ? (
-        <div className="transcript-view">
-          {transcript.length === 0 ? (
-            <p className="empty-state">
-              Transcript will appear here as you speak...
-            </p>
-          ) : (
-            transcript.map((segment, index) => (
-              <div
-                key={index}
-                className={`transcript-segment ${segment.speaker}`}
-              >
-                <span className="speaker-label">
-                  {segment.speaker === "user" ? "You" : "Other"}
-                </span>
-                <span className="segment-text">{segment.text}</span>
-              </div>
-            ))
-          )}
-        </div>
-      ) : (
-        <>
-          {/* Insights Summary */}
-          <div className="insights-content">
-            <h3 className="insights-title">{insights.title}</h3>
-            <p className="insights-summary">{insights.summary}</p>
-            {insights.context && (
-              <p className="insights-context">{insights.context}</p>
-            )}
-          </div>
+      <div className="insights-content">
+        <h3 className="insights-title">{insights.title}</h3>
+        <p className="insights-summary">{insights.summary}</p>
+        {insights.context && (
+          <p className="insights-context">{insights.context}</p>
+        )}
+      </div>
 
-          {/* Actions */}
-          <div className="actions-section">
-            <h4 className="actions-title">Actions</h4>
-            <div className="actions-list">
-              {actions.map((action) => (
-                <button
-                  key={action.id}
-                  className={`action-item ${selectedAction === action.id ? "selected" : ""}`}
-                  onClick={() => onActionSelect(action.id)}
-                  aria-pressed={selectedAction === action.id}
-                >
-                  <span className={`action-icon ${action.icon}`}>
-                    {getActionIcon(action.icon)}
-                  </span>
-                  <span className="action-label">{action.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
+      <div className="actions-section">
+        <h4 className="actions-title">Actions</h4>
+        <div className="actions-list">
+          {actions.map((action) => (
+            <button
+              key={action.id}
+              className={`action-item ${selectedAction === action.id ? "selected" : ""}`}
+              onClick={() => onActionSelect(action.id)}
+              aria-pressed={selectedAction === action.id}
+            >
+              <span className={`action-icon ${action.icon}`}>
+                {getActionIcon(action.icon)}
+              </span>
+              <span className="action-label">{action.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

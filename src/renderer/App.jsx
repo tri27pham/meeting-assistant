@@ -148,12 +148,21 @@ function App() {
       handleResetLayout();
     });
 
+    const unsubToggleTranscript = window.cluely.on?.toggleTranscript?.(() => {
+      console.log("[App] Toggle transcript event received");
+      setShowTranscript((prev) => {
+        console.log("[App] Toggling transcript from", prev, "to", !prev);
+        return !prev;
+      });
+    });
+
     return () => {
       unsubTranscript?.();
       unsubSuggestion?.();
       unsubInsights?.();
       unsubTrigger?.();
       unsubResetLayout?.();
+      unsubToggleTranscript?.();
     };
   }, []);
 
@@ -266,9 +275,6 @@ function App() {
           insights={insights}
           actions={actions}
           selectedAction={selectedAction}
-          showTranscript={showTranscript}
-          transcript={transcript}
-          onToggleTranscript={() => setShowTranscript(!showTranscript)}
           onActionSelect={handleActionSelect}
           onCopyInsights={handleCopyInsights}
         />

@@ -70,5 +70,11 @@ contextBridge.exposeInMainWorld("cluely", {
       ipcRenderer.on("reset-layout", () => callback());
       return () => ipcRenderer.removeAllListeners("reset-layout");
     },
+
+    // Toggle transcript trigger from hotkey
+    toggleTranscript: (callback) => {
+      ipcRenderer.on("toggle-transcript", () => callback());
+      return () => ipcRenderer.removeAllListeners("toggle-transcript");
+    },
   },
 });
