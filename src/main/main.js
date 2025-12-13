@@ -91,17 +91,12 @@ function registerHotkeys() {
   });
 
   // Toggle transcript: Cmd+;
-  const transcriptRegistered = globalShortcut.register("CommandOrControl+;", () => {
+  globalShortcut.register("CommandOrControl+;", () => {
     console.log("[Main] CommandOrControl+; pressed");
     if (overlayWindow) {
       overlayWindow.webContents.send("toggle-transcript");
     }
   });
-  if (!transcriptRegistered) {
-    console.log("[Main] Failed to register CommandOrControl+; hotkey");
-  } else {
-    console.log("[Main] Successfully registered CommandOrControl+; hotkey");
-  }
 }
 
 // IPC Handlers
