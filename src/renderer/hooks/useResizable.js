@@ -11,9 +11,8 @@ export function useResizable({
   maxSize = { width: 800, height: 600 },
   storageKey = null,
   onResizeEnd = null,
-  onPositionAdjust = null, // Callback to adjust position when resizing from w/n
+  onPositionAdjust = null,
 }) {
-  // Load saved size from localStorage if available
   const getSavedSize = () => {
     if (storageKey) {
       try {
@@ -36,7 +35,6 @@ export function useResizable({
   const elementStartSize = useRef({ width: 0, height: 0 });
   const lastSize = useRef({ width: 0, height: 0 });
 
-  // Save size to localStorage when it changes
   useEffect(() => {
     if (storageKey && !isResizing) {
       try {
@@ -47,7 +45,6 @@ export function useResizable({
     }
   }, [size, storageKey, isResizing]);
 
-  // Constrain size within bounds
   const constrainSize = useCallback((newSize) => {
     return {
       width: Math.max(minSize.width, Math.min(maxSize.width, newSize.width)),
@@ -55,7 +52,6 @@ export function useResizable({
     };
   }, [minSize, maxSize]);
 
-  // Handle mouse down on resize handle
   const handleResizeStart = useCallback((e, direction) => {
     if (e.button !== 0) return;
     
@@ -72,7 +68,6 @@ export function useResizable({
     document.body.style.userSelect = 'none';
   }, [size]);
 
-  // Handle mouse move during resize
   const handleMouseMove = useCallback((e) => {
     if (!isResizing || !resizeDirection) return;
 
@@ -82,7 +77,6 @@ export function useResizable({
     let newWidth = elementStartSize.current.width;
     let newHeight = elementStartSize.current.height;
 
-    // Handle different resize directions
     if (resizeDirection.includes('e')) {
       newWidth = elementStartSize.current.width + deltaX;
     }
@@ -98,17 +92,13 @@ export function useResizable({
 
     const constrainedSize = constrainSize({ width: newWidth, height: newHeight });
     
-    // Calculate position adjustment for west/north resizing
-    // This keeps the opposite edge stationary
     if (onPositionAdjust && (resizeDirection.includes('w') || resizeDirection.includes('n'))) {
       const positionDelta = { x: 0, y: 0 };
       
       if (resizeDirection.includes('w')) {
-        // When resizing from west, move position by the change in width
         positionDelta.x = lastSize.current.width - constrainedSize.width;
       }
       if (resizeDirection.includes('n')) {
-        // When resizing from north, move position by the change in height
         positionDelta.y = lastSize.current.height - constrainedSize.height;
       }
       
@@ -121,7 +111,6 @@ export function useResizable({
     setSize(constrainedSize);
   }, [isResizing, resizeDirection, constrainSize, onPositionAdjust]);
 
-  // Handle mouse up
   const handleMouseUp = useCallback(() => {
     if (!isResizing) return;
     
@@ -130,13 +119,11 @@ export function useResizable({
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
     
-    // Call onResizeEnd callback
     if (onResizeEnd) {
       onResizeEnd();
     }
   }, [isResizing, onResizeEnd]);
 
-  // Add/remove global mouse event listeners
   useEffect(() => {
     if (isResizing) {
       window.addEventListener('mousemove', handleMouseMove);
@@ -149,7 +136,6 @@ export function useResizable({
     }
   }, [isResizing, handleMouseMove, handleMouseUp]);
 
-  // Reset size to initial
   const resetSize = useCallback(() => {
     setSize(initialSize);
     if (storageKey) {
@@ -161,7 +147,7 @@ export function useResizable({
     size,
     setSize,
     isResizing,
-    resizeDirection, // Expose which direction is being resized
+    resizeDirection,
     handleResizeStart,
     resetSize,
   };

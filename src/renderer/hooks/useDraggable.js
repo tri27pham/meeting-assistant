@@ -13,7 +13,6 @@ export function useDraggable({
   storageKey = null,
   onDragEnd = null,
 }) {
-  // Load saved position from localStorage if available
   const getSavedPosition = () => {
     if (storageKey) {
       try {
@@ -34,7 +33,6 @@ export function useDraggable({
   const dragStartPos = useRef({ x: 0, y: 0 });
   const elementStartPos = useRef({ x: 0, y: 0 });
 
-  // Save position to localStorage when it changes
   useEffect(() => {
     if (storageKey && !isDragging) {
       try {
@@ -45,31 +43,24 @@ export function useDraggable({
     }
   }, [position, storageKey, isDragging]);
 
-  // Handle mouse down on drag area
   const handleMouseDown = useCallback((e) => {
-    // Only left mouse button
     if (e.button !== 0) return;
     
-    // Don't drag if clicking on interactive elements
     const target = e.target;
     const isInteractive = target.closest('button, input, select, textarea, a, [data-no-drag]');
     if (isInteractive) return;
     
-    // Don't drag if clicking on resize handles
     if (target.closest('.resize-handle')) return;
     
-    // Prevent default to avoid text selection
     e.preventDefault();
     
     setIsDragging(true);
     dragStartPos.current = { x: e.clientX, y: e.clientY };
     elementStartPos.current = { ...position };
 
-    // Prevent text selection while dragging
     document.body.style.userSelect = 'none';
   }, [position]);
 
-  // Handle mouse move
   const handleMouseMove = useCallback((e) => {
     if (!isDragging) return;
 
@@ -82,20 +73,17 @@ export function useDraggable({
     });
   }, [isDragging]);
 
-  // Handle mouse up
   const handleMouseUp = useCallback(() => {
     if (!isDragging) return;
     
     setIsDragging(false);
     document.body.style.userSelect = '';
     
-    // Call onDragEnd callback
     if (onDragEnd) {
       onDragEnd();
     }
   }, [isDragging, onDragEnd]);
 
-  // Add/remove global mouse event listeners
   useEffect(() => {
     if (isDragging) {
       window.addEventListener('mousemove', handleMouseMove);
@@ -108,7 +96,6 @@ export function useDraggable({
     }
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  // Adjust position by a delta (used when resizing from w/n edges)
   const adjustPosition = useCallback((delta) => {
     setPosition(prev => ({
       x: prev.x + delta.x,
@@ -116,7 +103,6 @@ export function useDraggable({
     }));
   }, []);
 
-  // Reset position to initial
   const resetPosition = useCallback(() => {
     setPosition(initialPosition);
     if (storageKey) {

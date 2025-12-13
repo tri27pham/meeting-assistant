@@ -6,10 +6,8 @@ import TranscriptPanel from './components/TranscriptPanel';
 import SettingsPanel from './components/SettingsPanel';
 import DraggablePanel from './components/DraggablePanel';
 
-// Panel IDs for localStorage keys
 const PANEL_IDS = ['control-bar', 'live-insights', 'ai-response', 'transcript', 'settings'];
 
-// Default panel sizes
 const PANEL_SIZES = {
   liveInsights: { width: 420, height: 400 },
   aiResponse: { width: 450, height: 380 },
@@ -17,38 +15,31 @@ const PANEL_SIZES = {
 };
 
 function App() {
-  // Session state
   const [isRunning, setIsRunning] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
   const [sessionTime, setSessionTime] = useState(0);
 
-  // Layout reset key - incrementing this forces panels to remount
   const [layoutKey, setLayoutKey] = useState(0);
 
-  // UI state
   const [showTranscript, setShowTranscript] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAiResponse, setShowAiResponse] = useState(true);
   
-  // Calculate default positions based on screen size
   const defaultPositions = useMemo(() => {
     const screenWidth = window.innerWidth;
     const screenHeight = window.innerHeight;
     
-    // Container has 16px padding, panels are positioned relative to content area
-    // For equal visual margins from screen edges:
-    // - Left panel: x = margin - containerPadding (to offset the padding)
-    // - Right panel: x = screenWidth - panelWidth - margin - containerPadding
     const containerPadding = 16;
-    const margin = 32; // Visual margin from screen edge
-    const topOffset = Math.floor(screenHeight * 0.10); // 10% from top (was 80px, moved down 5%)
+    const margin = 32;
+    const topOffset = Math.floor(screenHeight * 0.10);
     
     return {
       controlBar: { 
-        x: 0, // Centered via CSS and centered prop
+        x: 0,
         y: 16 
       },
       liveInsights: { 
-        x: margin - containerPadding, // 16px from container = 32px from screen
+        x: margin - containerPadding,
         y: topOffset 
       },
       aiResponse: { 
@@ -64,9 +55,8 @@ function App() {
         y: topOffset + PANEL_SIZES.aiResponse.height + 16,
       },
     };
-  }, [layoutKey]); // Recalculate when layout resets
+  }, [layoutKey]);
   
-  // Data state (received from backend)
   const [insights, setInsights] = useState({
     title: 'Discussion about news',
     summary: 'You started talking about how there\'s a lot of big startup acquisitions happening',
@@ -90,7 +80,6 @@ function App() {
 
   const [transcript, setTranscript] = useState([]);
 
-  // Timer effect
   useEffect(() => {
     let interval;
     if (isRunning && !isPaused) {
@@ -101,7 +90,6 @@ function App() {
     return () => clearInterval(interval);
   }, [isRunning, isPaused]);
 
-  // Backend event listeners
   useEffect(() => {
     if (!window.cluely) return;
 
@@ -138,7 +126,6 @@ function App() {
     };
   }, []);
 
-  // Handlers
   const handleTogglePause = useCallback(async () => {
     if (window.cluely) {
       await window.cluely.session.togglePause();
@@ -147,10 +134,15 @@ function App() {
   }, []);
 
   const handleAskAI = useCallback(async () => {
-    if (window.cluely) {
-      await window.cluely.ai.triggerAction('manual', { timestamp: Date.now() });
+    if (showAiResponse) {
+      setShowAiResponse(false);
+    } else {
+      setShowAiResponse(true);
+      if (window.cluely) {
+        await window.cluely.ai.triggerAction('manual', { timestamp: Date.now() });
+      }
     }
-  }, []);
+  }, [showAiResponse]);
 
   const handleToggleVisibility = useCallback(() => {
     if (window.cluely) {
@@ -174,10 +166,10 @@ function App() {
 
   const handleCloseResponse = useCallback(() => {
     setAiResponse(null);
+    setShowAiResponse(false);
   }, []);
 
   const handleCopyInsights = useCallback(() => {
-    // Visual feedback could be added here
   }, []);
 
   const handleToggleSettings = useCallback(() => {
@@ -188,15 +180,12 @@ function App() {
     setShowSettings(false);
   }, []);
 
-  // Reset all panel positions and sizes
   const handleResetLayout = useCallback(() => {
-    // Clear all panel position and size data from localStorage
     PANEL_IDS.forEach((panelId) => {
       localStorage.removeItem(`cluely-panel-pos-${panelId}`);
       localStorage.removeItem(`cluely-panel-size-${panelId}`);
     });
     
-    // Increment key to force panels to remount with default values
     setLayoutKey((prev) => prev + 1);
   }, []);
 
@@ -208,7 +197,6 @@ function App() {
 
   return (
     <div className="overlay-container">
-      {/* Control Bar - centered at top, draggable but not resizable */}
       <DraggablePanel 
         key={`control-bar-${layoutKey}`}
         panelId="control-bar"
@@ -228,7 +216,6 @@ function App() {
         />
       </DraggablePanel>
       
-      {/* Live Insights Panel - 1/4 down from top, left aligned */}
       <DraggablePanel 
         key={`live-insights-${layoutKey}`}
         panelId="live-insights"
@@ -250,8 +237,7 @@ function App() {
         />
       </DraggablePanel>
       
-      {/* AI Response Panel - 1/4 down from top, right aligned */}
-      {aiResponse && (
+      {showAiResponse && (
         <DraggablePanel 
           key={`ai-response-${layoutKey}`}
           panelId="ai-response"
@@ -269,8 +255,7 @@ function App() {
         </DraggablePanel>
       )}
 
-      {/* Transcript Panel - below live insights, left aligned */}
-      <DraggablePanel
+      {showTranscript && (<DraggablePanel
         key={`transcript-${layoutKey}`}
         panelId="transcript"
         initialPosition={defaultPositions.transcript}
@@ -279,10 +264,9 @@ function App() {
         maxSize={{ width: 500, height: 600 }}
         resizable={true}
       >
-        <TranscriptPanel />
-      </DraggablePanel>
+      <TranscriptPanel />
+      </DraggablePanel>)}
 
-      {/* Settings Panel - below AI response, right aligned */}
       {showSettings && (
         <DraggablePanel
           key={`settings-${layoutKey}`}
@@ -297,7 +281,6 @@ function App() {
         </DraggablePanel>
       )}
       
-      {/* Keyboard shortcuts hint */}
       <div className="shortcuts-hint">
         <kbd>⌘</kbd><kbd>/</kbd> show/hide · <kbd>⌘</kbd><kbd>\</kbd> reset layout
       </div>

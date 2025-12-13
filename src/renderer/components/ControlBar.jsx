@@ -12,7 +12,6 @@ function ControlBar({
 }) {
   return (
     <div className="control-bar glass-panel">
-      {/* Left group: Play/Pause + Waveform + Timer */}
       <div className="control-group">
         <button 
           className="control-btn pause-btn"
@@ -33,7 +32,6 @@ function ControlBar({
 
       <div className="control-divider" />
 
-      {/* Center: Ask AI */}
       <button className="control-btn ask-ai-btn" onClick={onAskAI}>
         <span>Ask AI</span>
         <kbd className="shortcut">⌘</kbd>
@@ -42,7 +40,6 @@ function ControlBar({
 
       <div className="control-divider" />
 
-      {/* Right: Show/Hide */}
       <button className="control-btn visibility-btn" onClick={onToggleVisibility}>
         <span>Show/Hide</span>
         <kbd className="shortcut">⌘</kbd>
@@ -51,7 +48,6 @@ function ControlBar({
 
       <div className="control-divider" />
 
-      {/* Reset Layout */}
       <button 
         className="control-btn reset-btn" 
         onClick={onResetLayout}
@@ -64,7 +60,6 @@ function ControlBar({
 
       <div className="control-divider" />
 
-      {/* Settings */}
       <button 
         className="control-btn settings-btn" 
         onClick={onOpenSettings}

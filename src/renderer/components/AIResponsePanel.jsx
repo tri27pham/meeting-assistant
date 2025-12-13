@@ -2,8 +2,6 @@ import React from 'react';
 import { GlobeIcon, CopyIcon, CloseIcon } from './Icons';
 
 function AIResponsePanel({ response, onCopy, onClose }) {
-  if (!response) return null;
-
   return (
     <div className="ai-response-panel glass-panel glass-panel-elevated">
       {/* Header */}
@@ -13,13 +11,15 @@ function AIResponsePanel({ response, onCopy, onClose }) {
             <span className="response-label">AI response</span>
           </div>
           <div className="panel-actions">
-            <button 
-              className="header-btn icon-only" 
-              onClick={onCopy} 
-              aria-label="Copy response"
-            >
-              <CopyIcon />
-            </button>
+            {response && (
+              <button 
+                className="header-btn icon-only" 
+                onClick={onCopy} 
+                aria-label="Copy response"
+              >
+                <CopyIcon />
+              </button>
+            )}
             <button 
               className="header-btn icon-only close-btn" 
               onClick={onClose} 
@@ -31,21 +31,29 @@ function AIResponsePanel({ response, onCopy, onClose }) {
         </div>
         
         {/* Action badge */}
-        <div className="response-action-badge">
-          <GlobeIcon />
-          <span>{response.action}</span>
-        </div>
+        {response && (
+          <div className="response-action-badge">
+            <GlobeIcon />
+            <span>{response.action || 'Response'}</span>
+          </div>
+        )}
       </div>
 
       {/* Response content */}
       <div className="response-content">
-        {response.content.split('\n\n').map((paragraph, index) => (
-          <p key={index}>{paragraph}</p>
-        ))}
+        {response ? (
+          response.content.split('\n\n').map((paragraph, index) => (
+            <p key={index}>{paragraph}</p>
+          ))
+        ) : (
+          <p style={{ color: 'var(--text-secondary)', padding: '20px', textAlign: 'center' }}>
+            Waiting for response...
+          </p>
+        )}
       </div>
 
       {/* Footer with origin */}
-      {response.origin && (
+      {response?.origin && (
         <div className="response-footer">
           <span className={`origin-badge ${response.origin}`}>
             {response.origin === 'cloud' ? '☁️ Cloud' : '💻 Local'}
