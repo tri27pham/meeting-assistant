@@ -1,12 +1,18 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import ControlBar from './components/ControlBar';
-import LiveInsightsPanel from './components/LiveInsightsPanel';
-import AIResponsePanel from './components/AIResponsePanel';
-import TranscriptPanel from './components/TranscriptPanel';
-import SettingsPanel from './components/SettingsPanel';
-import DraggablePanel from './components/DraggablePanel';
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import ControlBar from "./components/ControlBar";
+import LiveInsightsPanel from "./components/LiveInsightsPanel";
+import AIResponsePanel from "./components/AIResponsePanel";
+import TranscriptPanel from "./components/TranscriptPanel";
+import SettingsPanel from "./components/SettingsPanel";
+import DraggablePanel from "./components/DraggablePanel";
 
-const PANEL_IDS = ['control-bar', 'live-insights', 'ai-response', 'transcript', 'settings'];
+const PANEL_IDS = [
+  "control-bar",
+  "live-insights",
+  "ai-response",
+  "transcript",
+  "settings",
+];
 
 const PANEL_SIZES = {
   liveInsights: { width: 420, height: 400 },
@@ -24,27 +30,31 @@ function App() {
   const [showTranscript, setShowTranscript] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAiResponse, setShowAiResponse] = useState(true);
-  
+
   const defaultPositions = useMemo(() => {
     const screenWidth = window.innerWidth;
     const screenHeight = window.innerHeight;
-    
+
     const containerPadding = 16;
     const margin = 32;
-    const topOffset = Math.floor(screenHeight * 0.10);
-    
+    const topOffset = Math.floor(screenHeight * 0.1);
+
     return {
-      controlBar: { 
+      controlBar: {
         x: 0,
-        y: 16 
+        y: 16,
       },
-      liveInsights: { 
+      liveInsights: {
         x: margin - containerPadding,
-        y: topOffset 
+        y: topOffset,
       },
-      aiResponse: { 
-        x: screenWidth - PANEL_SIZES.aiResponse.width - margin - containerPadding,
-        y: topOffset 
+      aiResponse: {
+        x:
+          screenWidth -
+          PANEL_SIZES.aiResponse.width -
+          margin -
+          containerPadding,
+        y: topOffset,
       },
       transcript: {
         x: margin - containerPadding,
@@ -56,26 +66,47 @@ function App() {
       },
     };
   }, [layoutKey]);
-  
+
   const [insights, setInsights] = useState({
-    title: 'Discussion about news',
-    summary: 'You started talking about how there\'s a lot of big startup acquisitions happening',
-    context: 'Neel asked you about who recently acquired Windsurf',
+    title: "Discussion about news",
+    summary:
+      "You started talking about how there's a lot of big startup acquisitions happening",
+    context: "Neel asked you about who recently acquired Windsurf",
   });
 
   const [actions, setActions] = useState([
-    { id: 1, type: 'define', label: 'Define startup acquisition', icon: 'book' },
-    { id: 2, type: 'search', label: 'Search the web for information about Windsurf acquisition', icon: 'globe' },
-    { id: 3, type: 'followup', label: 'Suggest follow-up questions', icon: 'chat' },
-    { id: 4, type: 'help', label: 'Give me helpful information', icon: 'sparkle' },
+    {
+      id: 1,
+      type: "define",
+      label: "Define startup acquisition",
+      icon: "book",
+    },
+    {
+      id: 2,
+      type: "search",
+      label: "Search the web for information about Windsurf acquisition",
+      icon: "globe",
+    },
+    {
+      id: 3,
+      type: "followup",
+      label: "Suggest follow-up questions",
+      icon: "chat",
+    },
+    {
+      id: 4,
+      type: "help",
+      label: "Give me helpful information",
+      icon: "sparkle",
+    },
   ]);
 
   const [selectedAction, setSelectedAction] = useState(2);
-  
+
   const [aiResponse, setAiResponse] = useState({
-    action: 'Search the web for information...',
+    action: "Search the web for information...",
     content: `On July 14, 2025, Cognition acquired the remainder of Windsurf to integrate into its Devin platform\n\nIncludes Windsurf's agentic IDE, IP, brand, $82 M ARR, 350+ enterprise clients, and full team`,
-    origin: 'cloud',
+    origin: "cloud",
   });
 
   const [transcript, setTranscript] = useState([]);
@@ -139,7 +170,9 @@ function App() {
     } else {
       setShowAiResponse(true);
       if (window.cluely) {
-        await window.cluely.ai.triggerAction('manual', { timestamp: Date.now() });
+        await window.cluely.ai.triggerAction("manual", {
+          timestamp: Date.now(),
+        });
       }
     }
   }, [showAiResponse]);
@@ -150,13 +183,18 @@ function App() {
     }
   }, []);
 
-  const handleActionSelect = useCallback(async (actionId) => {
-    setSelectedAction(actionId);
-    const action = actions.find((a) => a.id === actionId);
-    if (action && window.cluely) {
-      await window.cluely.ai.triggerAction(action.type, { label: action.label });
-    }
-  }, [actions]);
+  const handleActionSelect = useCallback(
+    async (actionId) => {
+      setSelectedAction(actionId);
+      const action = actions.find((a) => a.id === actionId);
+      if (action && window.cluely) {
+        await window.cluely.ai.triggerAction(action.type, {
+          label: action.label,
+        });
+      }
+    },
+    [actions],
+  );
 
   const handleCopyResponse = useCallback(() => {
     if (aiResponse?.content) {
@@ -169,8 +207,7 @@ function App() {
     setShowAiResponse(false);
   }, []);
 
-  const handleCopyInsights = useCallback(() => {
-  }, []);
+  const handleCopyInsights = useCallback(() => {}, []);
 
   const handleToggleSettings = useCallback(() => {
     setShowSettings((prev) => !prev);
@@ -185,19 +222,19 @@ function App() {
       localStorage.removeItem(`cluely-panel-pos-${panelId}`);
       localStorage.removeItem(`cluely-panel-size-${panelId}`);
     });
-    
+
     setLayoutKey((prev) => prev + 1);
   }, []);
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
   return (
     <div className="overlay-container">
-      <DraggablePanel 
+      <DraggablePanel
         key={`control-bar-${layoutKey}`}
         panelId="control-bar"
         initialPosition={defaultPositions.controlBar}
@@ -215,8 +252,8 @@ function App() {
           onOpenSettings={handleToggleSettings}
         />
       </DraggablePanel>
-      
-      <DraggablePanel 
+
+      <DraggablePanel
         key={`live-insights-${layoutKey}`}
         panelId="live-insights"
         initialPosition={defaultPositions.liveInsights}
@@ -236,9 +273,9 @@ function App() {
           onCopyInsights={handleCopyInsights}
         />
       </DraggablePanel>
-      
+
       {showAiResponse && (
-        <DraggablePanel 
+        <DraggablePanel
           key={`ai-response-${layoutKey}`}
           panelId="ai-response"
           initialPosition={defaultPositions.aiResponse}
@@ -255,17 +292,19 @@ function App() {
         </DraggablePanel>
       )}
 
-      {showTranscript && (<DraggablePanel
-        key={`transcript-${layoutKey}`}
-        panelId="transcript"
-        initialPosition={defaultPositions.transcript}
-        initialSize={PANEL_SIZES.transcript}
-        minSize={{ width: 300, height: 200 }}
-        maxSize={{ width: 500, height: 600 }}
-        resizable={true}
-      >
-      <TranscriptPanel />
-      </DraggablePanel>)}
+      {showTranscript && (
+        <DraggablePanel
+          key={`transcript-${layoutKey}`}
+          panelId="transcript"
+          initialPosition={defaultPositions.transcript}
+          initialSize={PANEL_SIZES.transcript}
+          minSize={{ width: 300, height: 200 }}
+          maxSize={{ width: 500, height: 600 }}
+          resizable={true}
+        >
+          <TranscriptPanel />
+        </DraggablePanel>
+      )}
 
       {showSettings && (
         <DraggablePanel
@@ -280,9 +319,11 @@ function App() {
           <SettingsPanel onClose={handleCloseSettings} />
         </DraggablePanel>
       )}
-      
+
       <div className="shortcuts-hint">
-        <kbd>⌘</kbd><kbd>/</kbd> show/hide · <kbd>⌘</kbd><kbd>\</kbd> reset layout
+        <kbd>⌘</kbd>
+        <kbd>/</kbd> show/hide · <kbd>⌘</kbd>
+        <kbd>\</kbd> reset layout
       </div>
     </div>
   );

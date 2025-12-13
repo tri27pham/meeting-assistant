@@ -8,37 +8,37 @@
   --glass-bg: rgba(28, 28, 30, 0.72);
   --glass-bg-elevated: rgba(44, 44, 46, 0.68);
   --glass-bg-hover: rgba(60, 60, 62, 0.58);
-  
+
   /* Glass borders - subtle luminous edges */
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-border-light: rgba(255, 255, 255, 0.15);
   --glass-border-accent: rgba(255, 255, 255, 0.2);
-  
+
   /* Inner highlights for depth */
   --glass-highlight-top: rgba(255, 255, 255, 0.12);
   --glass-highlight-inner: rgba(255, 255, 255, 0.04);
-  
+
   /* Blur & saturation - the magic */
   --blur-intensity: 50px;
   --blur-saturate: 190%;
   --blur-brightness: 1.1;
-  
+
   /* Text colors - crisp and readable */
   --text-primary: rgba(255, 255, 255, 0.95);
   --text-secondary: rgba(255, 255, 255, 0.72);
   --text-tertiary: rgba(255, 255, 255, 0.48);
   --text-muted: rgba(255, 255, 255, 0.32);
-  
+
   /* Accent colors - vibrant but not overwhelming */
-  --accent-blue: #3B82F6;
+  --accent-blue: #3b82f6;
   --accent-blue-soft: rgba(59, 130, 246, 0.85);
   --accent-blue-glow: rgba(59, 130, 246, 0.25);
-  --accent-purple: #A855F7;
+  --accent-purple: #a855f7;
   --accent-purple-soft: rgba(168, 85, 247, 0.85);
-  --accent-green: #22C55E;
-  --accent-yellow: #FBBF24;
-  --accent-pink: #EC4899;
-  
+  --accent-green: #22c55e;
+  --accent-yellow: #fbbf24;
+  --accent-pink: #ec4899;
+
   /* Spacing system */
   --space-xs: 4px;
   --space-sm: 8px;
@@ -46,7 +46,7 @@
   --space-lg: 16px;
   --space-xl: 20px;
   --space-2xl: 24px;
-  
+
   /* Border radius - rounded corners */
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -54,23 +54,29 @@
   --radius-xl: 20px;
   --radius-2xl: 24px;
   --radius-full: 9999px;
-  
+
   /* Typography - Apple-style */
-  --font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', system-ui, sans-serif;
-  --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+  --font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter",
+    system-ui, sans-serif;
+  --font-mono: "SF Mono", "Menlo", "Monaco", monospace;
 }
 
 /* ============================================
    Reset & Base
    ============================================ */
 
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   width: 100%;
   height: 100%;
   background: transparent;
@@ -89,39 +95,31 @@ html, body, #root {
 
 .glass-panel {
   background: var(--glass-bg);
-  backdrop-filter: 
-    blur(var(--blur-intensity)) 
-    saturate(var(--blur-saturate)) 
+  backdrop-filter: blur(var(--blur-intensity)) saturate(var(--blur-saturate))
     brightness(var(--blur-brightness));
-  -webkit-backdrop-filter: 
-    blur(var(--blur-intensity)) 
-    saturate(var(--blur-saturate)) 
-    brightness(var(--blur-brightness));
-  
+  -webkit-backdrop-filter: blur(var(--blur-intensity))
+    saturate(var(--blur-saturate)) brightness(var(--blur-brightness));
+
   /* Multi-layer border for depth */
   border: 1px solid var(--glass-border-light);
   border-radius: var(--radius-xl);
-  
+
   /* Layered shadows for floating effect */
   box-shadow: 
     /* Outer glow */
     0 0 0 0.5px rgba(255, 255, 255, 0.05),
-    /* Ambient shadow */
-    0 4px 24px -4px rgba(0, 0, 0, 0.4),
-    /* Drop shadow */
-    0 12px 40px -8px rgba(0, 0, 0, 0.35),
-    /* Inner highlight at top */
-    inset 0 1px 0 0 var(--glass-highlight-top),
-    /* Subtle inner glow */
-    inset 0 0 20px 0 var(--glass-highlight-inner);
-  
+    /* Ambient shadow */ 0 4px 24px -4px rgba(0, 0, 0, 0.4),
+    /* Drop shadow */ 0 12px 40px -8px rgba(0, 0, 0, 0.35),
+    /* Inner highlight at top */ inset 0 1px 0 0 var(--glass-highlight-top),
+    /* Subtle inner glow */ inset 0 0 20px 0 var(--glass-highlight-inner);
+
   position: relative;
   overflow: hidden;
 }
 
 /* Top edge luminous highlight */
 .glass-panel::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 10%;
@@ -141,7 +139,7 @@ html, body, #root {
 
 /* Subtle gradient overlay for depth */
 .glass-panel::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   background: linear-gradient(
@@ -234,7 +232,9 @@ html, body, #root {
   position: absolute;
   z-index: 20;
   background: transparent;
-  transition: background 0.08s ease, box-shadow 0.08s ease;
+  transition:
+    background 0.08s ease,
+    box-shadow 0.08s ease;
 }
 
 /* Edge handles - thin lines positioned on edges */
@@ -307,13 +307,23 @@ html, body, #root {
 /* Vertical edges - gradient fades top to bottom */
 .resize-handle-e.is-resizing,
 .resize-handle-w.is-resizing {
-  background: linear-gradient(to bottom, transparent 0%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(255, 255, 255, 0.6) 50%,
+    transparent 100%
+  );
 }
 
 /* Horizontal edges - gradient fades left to right */
 .resize-handle-n.is-resizing,
 .resize-handle-s.is-resizing {
-  background: linear-gradient(to right, transparent 0%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(255, 255, 255, 0.6) 50%,
+    transparent 100%
+  );
 }
 
 /* Corner glow - borders with gradient opacity on outer edges */
@@ -321,7 +331,11 @@ html, body, #root {
   border-right: 2px solid rgba(255, 255, 255, 0.85);
   border-bottom: 2px solid rgba(255, 255, 255, 0.85);
   border-radius: 0 0 var(--radius-xl) 0;
-  -webkit-mask-image: radial-gradient(circle at 100% 100%, black 0%, transparent 100%);
+  -webkit-mask-image: radial-gradient(
+    circle at 100% 100%,
+    black 0%,
+    transparent 100%
+  );
   mask-image: radial-gradient(circle at 100% 100%, black 0%, transparent 100%);
 }
 
@@ -329,7 +343,11 @@ html, body, #root {
   border-left: 2px solid rgba(255, 255, 255, 0.85);
   border-bottom: 2px solid rgba(255, 255, 255, 0.85);
   border-radius: 0 0 0 var(--radius-xl);
-  -webkit-mask-image: radial-gradient(circle at 0% 100%, black 0%, transparent 100%);
+  -webkit-mask-image: radial-gradient(
+    circle at 0% 100%,
+    black 0%,
+    transparent 100%
+  );
   mask-image: radial-gradient(circle at 0% 100%, black 0%, transparent 100%);
 }
 
@@ -337,7 +355,11 @@ html, body, #root {
   border-right: 2px solid rgba(255, 255, 255, 0.85);
   border-top: 2px solid rgba(255, 255, 255, 0.85);
   border-radius: 0 var(--radius-xl) 0 0;
-  -webkit-mask-image: radial-gradient(circle at 100% 0%, black 0%, transparent 100%);
+  -webkit-mask-image: radial-gradient(
+    circle at 100% 0%,
+    black 0%,
+    transparent 100%
+  );
   mask-image: radial-gradient(circle at 100% 0%, black 0%, transparent 100%);
 }
 
@@ -345,7 +367,11 @@ html, body, #root {
   border-left: 2px solid rgba(255, 255, 255, 0.85);
   border-top: 2px solid rgba(255, 255, 255, 0.85);
   border-radius: var(--radius-xl) 0 0 0;
-  -webkit-mask-image: radial-gradient(circle at 0% 0%, black 0%, transparent 100%);
+  -webkit-mask-image: radial-gradient(
+    circle at 0% 0%,
+    black 0%,
+    transparent 100%
+  );
   mask-image: radial-gradient(circle at 0% 0%, black 0%, transparent 100%);
 }
 
@@ -504,7 +530,7 @@ html, body, #root {
   font-weight: 500;
   font-family: var(--font-mono);
   color: var(--text-secondary);
-  box-shadow: 
+  box-shadow:
     0 1px 0 0 rgba(0, 0, 0, 0.2),
     inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
 }
@@ -710,22 +736,22 @@ html, body, #root {
 }
 
 .action-icon.book {
-  color: #C4B5FD;
+  color: #c4b5fd;
   background: rgba(196, 181, 253, 0.15);
 }
 
 .action-icon.globe {
-  color: #93C5FD;
+  color: #93c5fd;
   background: rgba(147, 197, 253, 0.15);
 }
 
 .action-icon.chat {
-  color: #FCD34D;
+  color: #fcd34d;
   background: rgba(252, 211, 77, 0.15);
 }
 
 .action-icon.sparkle {
-  color: #F9A8D4;
+  color: #f9a8d4;
   background: rgba(249, 168, 212, 0.15);
 }
 
@@ -834,7 +860,7 @@ html, body, #root {
   border-radius: var(--radius-full);
   font-size: 12px;
   font-weight: 500;
-  color: #93C5FD;
+  color: #93c5fd;
   max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -854,7 +880,7 @@ html, body, #root {
 .close-btn:hover {
   background: rgba(239, 68, 68, 0.15);
   border-color: rgba(239, 68, 68, 0.25);
-  color: #FCA5A5;
+  color: #fca5a5;
 }
 
 /* Response content */
@@ -898,11 +924,11 @@ html, body, #root {
 }
 
 .origin-badge.cloud {
-  color: #93C5FD;
+  color: #93c5fd;
 }
 
 .origin-badge.local {
-  color: #86EFAC;
+  color: #86efac;
 }
 
 /* ============================================
@@ -967,11 +993,12 @@ html, body, #root {
 
 /* Waveform animation */
 @keyframes waveform {
-  0%, 100% { 
+  0%,
+  100% {
     transform: scaleY(0.4);
     opacity: 0.5;
   }
-  50% { 
+  50% {
     transform: scaleY(1);
     opacity: 1;
   }
@@ -982,11 +1009,21 @@ html, body, #root {
   transform-origin: center;
 }
 
-.waveform-indicator:not(.paused) svg rect:nth-child(1) { animation-delay: 0s; }
-.waveform-indicator:not(.paused) svg rect:nth-child(2) { animation-delay: 0.1s; }
-.waveform-indicator:not(.paused) svg rect:nth-child(3) { animation-delay: 0.2s; }
-.waveform-indicator:not(.paused) svg rect:nth-child(4) { animation-delay: 0.3s; }
-.waveform-indicator:not(.paused) svg rect:nth-child(5) { animation-delay: 0.15s; }
+.waveform-indicator:not(.paused) svg rect:nth-child(1) {
+  animation-delay: 0s;
+}
+.waveform-indicator:not(.paused) svg rect:nth-child(2) {
+  animation-delay: 0.1s;
+}
+.waveform-indicator:not(.paused) svg rect:nth-child(3) {
+  animation-delay: 0.2s;
+}
+.waveform-indicator:not(.paused) svg rect:nth-child(4) {
+  animation-delay: 0.3s;
+}
+.waveform-indicator:not(.paused) svg rect:nth-child(5) {
+  animation-delay: 0.15s;
+}
 
 /* Focus states */
 .control-btn:focus-visible,
@@ -1004,7 +1041,7 @@ html, body, #root {
   .panels-container {
     flex-direction: column;
   }
-  
+
   .live-insights-panel,
   .ai-response-panel {
     max-width: none;

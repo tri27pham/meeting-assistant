@@ -1,5 +1,5 @@
-import React from 'react';
-import { GlobeIcon, CopyIcon, CloseIcon } from './Icons';
+import React from "react";
+import { GlobeIcon, CopyIcon, CloseIcon } from "./Icons";
 
 function AIResponsePanel({ response, onCopy, onClose }) {
   return (
@@ -12,29 +12,29 @@ function AIResponsePanel({ response, onCopy, onClose }) {
           </div>
           <div className="panel-actions">
             {response && (
-              <button 
-                className="header-btn icon-only" 
-                onClick={onCopy} 
+              <button
+                className="header-btn icon-only"
+                onClick={onCopy}
                 aria-label="Copy response"
               >
                 <CopyIcon />
               </button>
             )}
-            <button 
-              className="header-btn icon-only close-btn" 
-              onClick={onClose} 
+            <button
+              className="header-btn icon-only close-btn"
+              onClick={onClose}
               aria-label="Close"
             >
               <CloseIcon />
             </button>
           </div>
         </div>
-        
+
         {/* Action badge */}
         {response && (
           <div className="response-action-badge">
             <GlobeIcon />
-            <span>{response.action || 'Response'}</span>
+            <span>{response.action || "Response"}</span>
           </div>
         )}
       </div>
@@ -42,11 +42,17 @@ function AIResponsePanel({ response, onCopy, onClose }) {
       {/* Response content */}
       <div className="response-content">
         {response ? (
-          response.content.split('\n\n').map((paragraph, index) => (
-            <p key={index}>{paragraph}</p>
-          ))
+          response.content
+            .split("\n\n")
+            .map((paragraph, index) => <p key={index}>{paragraph}</p>)
         ) : (
-          <p style={{ color: 'var(--text-secondary)', padding: '20px', textAlign: 'center' }}>
+          <p
+            style={{
+              color: "var(--text-secondary)",
+              padding: "20px",
+              textAlign: "center",
+            }}
+          >
             Waiting for response...
           </p>
         )}
@@ -56,7 +62,7 @@ function AIResponsePanel({ response, onCopy, onClose }) {
       {response?.origin && (
         <div className="response-footer">
           <span className={`origin-badge ${response.origin}`}>
-            {response.origin === 'cloud' ? '☁️ Cloud' : '💻 Local'}
+            {response.origin === "cloud" ? "☁️ Cloud" : "💻 Local"}
           </span>
         </div>
       )}

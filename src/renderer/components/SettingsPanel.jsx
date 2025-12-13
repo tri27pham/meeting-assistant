@@ -1,5 +1,5 @@
-import React from 'react';
-import { CloseIcon } from './Icons';
+import React from "react";
+import { CloseIcon } from "./Icons";
 
 function SettingsPanel({ onClose }) {
   return (
@@ -9,8 +9,8 @@ function SettingsPanel({ onClose }) {
           <span>Settings</span>
         </div>
         <div className="panel-actions">
-          <button 
-            className="header-btn icon-only close-btn" 
+          <button
+            className="header-btn icon-only close-btn"
             onClick={onClose}
             aria-label="Close"
           >
@@ -18,8 +18,14 @@ function SettingsPanel({ onClose }) {
           </button>
         </div>
       </div>
-      <div className="panel-content" style={{ flex: 1, overflow: 'auto' }}>
-        <p style={{ color: 'var(--text-secondary)', padding: '20px', textAlign: 'center' }}>
+      <div className="panel-content" style={{ flex: 1, overflow: "auto" }}>
+        <p
+          style={{
+            color: "var(--text-secondary)",
+            padding: "20px",
+            textAlign: "center",
+          }}
+        >
           Settings will appear here
         </p>
       </div>

@@ -1,33 +1,31 @@
-import React from 'react';
-import { PauseIcon, PlayIcon, WaveformIcon, SettingsIcon } from './Icons';
+import React from "react";
+import { PauseIcon, PlayIcon, WaveformIcon, SettingsIcon } from "./Icons";
 
-function ControlBar({ 
-  isPaused, 
-  sessionTime, 
-  onTogglePause, 
-  onAskAI, 
+function ControlBar({
+  isPaused,
+  sessionTime,
+  onTogglePause,
+  onAskAI,
   onToggleVisibility,
   onResetLayout,
-  onOpenSettings
+  onOpenSettings,
 }) {
   return (
     <div className="control-bar glass-panel">
       <div className="control-group">
-        <button 
+        <button
           className="control-btn pause-btn"
           onClick={onTogglePause}
-          aria-label={isPaused ? 'Resume' : 'Pause'}
+          aria-label={isPaused ? "Resume" : "Pause"}
         >
           {isPaused ? <PlayIcon /> : <PauseIcon />}
         </button>
 
-        <div className={`waveform-indicator ${isPaused ? 'paused' : ''}`}>
+        <div className={`waveform-indicator ${isPaused ? "paused" : ""}`}>
           <WaveformIcon />
         </div>
 
-        <div className="session-time">
-          {sessionTime}
-        </div>
+        <div className="session-time">{sessionTime}</div>
       </div>
 
       <div className="control-divider" />
@@ -40,7 +38,10 @@ function ControlBar({
 
       <div className="control-divider" />
 
-      <button className="control-btn visibility-btn" onClick={onToggleVisibility}>
+      <button
+        className="control-btn visibility-btn"
+        onClick={onToggleVisibility}
+      >
         <span>Show/Hide</span>
         <kbd className="shortcut">⌘</kbd>
         <kbd className="shortcut">/</kbd>
@@ -48,8 +49,8 @@ function ControlBar({
 
       <div className="control-divider" />
 
-      <button 
-        className="control-btn reset-btn" 
+      <button
+        className="control-btn reset-btn"
         onClick={onResetLayout}
         title="Reset panel positions and sizes"
       >
@@ -60,8 +61,8 @@ function ControlBar({
 
       <div className="control-divider" />
 
-      <button 
-        className="control-btn settings-btn" 
+      <button
+        className="control-btn settings-btn"
         onClick={onOpenSettings}
         title="Settings"
       >

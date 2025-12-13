@@ -1,28 +1,40 @@
-import React from 'react';
-import { SparkleIcon, TranscriptIcon, CopyIcon, BookIcon, GlobeIcon, ChatIcon } from './Icons';
+import React from "react";
+import {
+  SparkleIcon,
+  TranscriptIcon,
+  CopyIcon,
+  BookIcon,
+  GlobeIcon,
+  ChatIcon,
+} from "./Icons";
 
-function LiveInsightsPanel({ 
-  insights, 
-  actions, 
-  selectedAction, 
+function LiveInsightsPanel({
+  insights,
+  actions,
+  selectedAction,
   showTranscript,
   transcript,
-  onToggleTranscript, 
+  onToggleTranscript,
   onActionSelect,
-  onCopyInsights
+  onCopyInsights,
 }) {
   const getActionIcon = (iconType) => {
     switch (iconType) {
-      case 'book': return <BookIcon />;
-      case 'globe': return <GlobeIcon />;
-      case 'chat': return <ChatIcon />;
-      case 'sparkle': return <SparkleIcon />;
-      default: return <SparkleIcon />;
+      case "book":
+        return <BookIcon />;
+      case "globe":
+        return <GlobeIcon />;
+      case "chat":
+        return <ChatIcon />;
+      case "sparkle":
+        return <SparkleIcon />;
+      default:
+        return <SparkleIcon />;
     }
   };
 
   const handleCopy = () => {
-    const text = `${insights.title}\n\n${insights.summary}${insights.context ? '\n\n' + insights.context : ''}`;
+    const text = `${insights.title}\n\n${insights.summary}${insights.context ? "\n\n" + insights.context : ""}`;
     navigator.clipboard.writeText(text);
     onCopyInsights?.();
   };
@@ -36,16 +48,18 @@ function LiveInsightsPanel({
           <span>Live insights</span>
         </div>
         <div className="panel-actions">
-          <button 
-            className="header-btn" 
+          <button
+            className="header-btn"
             onClick={onToggleTranscript}
             aria-pressed={showTranscript}
           >
             <TranscriptIcon />
-            <span>{showTranscript ? 'Hide transcript' : 'Show transcript'}</span>
+            <span>
+              {showTranscript ? "Hide transcript" : "Show transcript"}
+            </span>
           </button>
-          <button 
-            className="header-btn icon-only" 
+          <button
+            className="header-btn icon-only"
             onClick={handleCopy}
             aria-label="Copy insights"
           >
@@ -58,15 +72,17 @@ function LiveInsightsPanel({
       {showTranscript ? (
         <div className="transcript-view">
           {transcript.length === 0 ? (
-            <p className="empty-state">Transcript will appear here as you speak...</p>
+            <p className="empty-state">
+              Transcript will appear here as you speak...
+            </p>
           ) : (
             transcript.map((segment, index) => (
-              <div 
-                key={index} 
+              <div
+                key={index}
                 className={`transcript-segment ${segment.speaker}`}
               >
                 <span className="speaker-label">
-                  {segment.speaker === 'user' ? 'You' : 'Other'}
+                  {segment.speaker === "user" ? "You" : "Other"}
                 </span>
                 <span className="segment-text">{segment.text}</span>
               </div>
@@ -91,7 +107,7 @@ function LiveInsightsPanel({
               {actions.map((action) => (
                 <button
                   key={action.id}
-                  className={`action-item ${selectedAction === action.id ? 'selected' : ''}`}
+                  className={`action-item ${selectedAction === action.id ? "selected" : ""}`}
                   onClick={() => onActionSelect(action.id)}
                   aria-pressed={selectedAction === action.id}
                 >

@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 function TranscriptPanel() {
   return (
@@ -12,7 +12,13 @@ function TranscriptPanel() {
         </div>
       </div>
       <div className="panel-content">
-        <p style={{ color: 'var(--text-secondary)', padding: '20px', textAlign: 'center' }}>
+        <p
+          style={{
+            color: "var(--text-secondary)",
+            padding: "20px",
+            textAlign: "center",
+          }}
+        >
           Transcript will appear here
         </p>
       </div>

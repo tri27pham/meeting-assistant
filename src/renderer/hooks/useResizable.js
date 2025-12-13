@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect } from "react";
 
 /**
  * Custom hook for making elements resizable
@@ -21,7 +21,7 @@ export function useResizable({
           return JSON.parse(saved);
         }
       } catch (e) {
-        console.warn('Failed to load saved size:', e);
+        console.warn("Failed to load saved size:", e);
       }
     }
     return initialSize;
@@ -30,7 +30,7 @@ export function useResizable({
   const [size, setSize] = useState(getSavedSize);
   const [isResizing, setIsResizing] = useState(false);
   const [resizeDirection, setResizeDirection] = useState(null);
-  
+
   const resizeStartPos = useRef({ x: 0, y: 0 });
   const elementStartSize = useRef({ width: 0, height: 0 });
   const lastSize = useRef({ width: 0, height: 0 });
@@ -40,85 +40,103 @@ export function useResizable({
       try {
         localStorage.setItem(storageKey, JSON.stringify(size));
       } catch (e) {
-        console.warn('Failed to save size:', e);
+        console.warn("Failed to save size:", e);
       }
     }
   }, [size, storageKey, isResizing]);
 
-  const constrainSize = useCallback((newSize) => {
-    return {
-      width: Math.max(minSize.width, Math.min(maxSize.width, newSize.width)),
-      height: Math.max(minSize.height, Math.min(maxSize.height, newSize.height)),
-    };
-  }, [minSize, maxSize]);
+  const constrainSize = useCallback(
+    (newSize) => {
+      return {
+        width: Math.max(minSize.width, Math.min(maxSize.width, newSize.width)),
+        height: Math.max(
+          minSize.height,
+          Math.min(maxSize.height, newSize.height),
+        ),
+      };
+    },
+    [minSize, maxSize],
+  );
 
-  const handleResizeStart = useCallback((e, direction) => {
-    if (e.button !== 0) return;
-    
-    e.preventDefault();
-    e.stopPropagation();
-    
-    setIsResizing(true);
-    setResizeDirection(direction);
-    resizeStartPos.current = { x: e.clientX, y: e.clientY };
-    elementStartSize.current = { ...size };
-    lastSize.current = { ...size };
+  const handleResizeStart = useCallback(
+    (e, direction) => {
+      if (e.button !== 0) return;
 
-    document.body.style.cursor = getCursorForDirection(direction);
-    document.body.style.userSelect = 'none';
-  }, [size]);
+      e.preventDefault();
+      e.stopPropagation();
 
-  const handleMouseMove = useCallback((e) => {
-    if (!isResizing || !resizeDirection) return;
+      setIsResizing(true);
+      setResizeDirection(direction);
+      resizeStartPos.current = { x: e.clientX, y: e.clientY };
+      elementStartSize.current = { ...size };
+      lastSize.current = { ...size };
 
-    const deltaX = e.clientX - resizeStartPos.current.x;
-    const deltaY = e.clientY - resizeStartPos.current.y;
+      document.body.style.cursor = getCursorForDirection(direction);
+      document.body.style.userSelect = "none";
+    },
+    [size],
+  );
 
-    let newWidth = elementStartSize.current.width;
-    let newHeight = elementStartSize.current.height;
+  const handleMouseMove = useCallback(
+    (e) => {
+      if (!isResizing || !resizeDirection) return;
 
-    if (resizeDirection.includes('e')) {
-      newWidth = elementStartSize.current.width + deltaX;
-    }
-    if (resizeDirection.includes('w')) {
-      newWidth = elementStartSize.current.width - deltaX;
-    }
-    if (resizeDirection.includes('s')) {
-      newHeight = elementStartSize.current.height + deltaY;
-    }
-    if (resizeDirection.includes('n')) {
-      newHeight = elementStartSize.current.height - deltaY;
-    }
+      const deltaX = e.clientX - resizeStartPos.current.x;
+      const deltaY = e.clientY - resizeStartPos.current.y;
 
-    const constrainedSize = constrainSize({ width: newWidth, height: newHeight });
-    
-    if (onPositionAdjust && (resizeDirection.includes('w') || resizeDirection.includes('n'))) {
-      const positionDelta = { x: 0, y: 0 };
-      
-      if (resizeDirection.includes('w')) {
-        positionDelta.x = lastSize.current.width - constrainedSize.width;
+      let newWidth = elementStartSize.current.width;
+      let newHeight = elementStartSize.current.height;
+
+      if (resizeDirection.includes("e")) {
+        newWidth = elementStartSize.current.width + deltaX;
       }
-      if (resizeDirection.includes('n')) {
-        positionDelta.y = lastSize.current.height - constrainedSize.height;
+      if (resizeDirection.includes("w")) {
+        newWidth = elementStartSize.current.width - deltaX;
       }
-      
-      if (positionDelta.x !== 0 || positionDelta.y !== 0) {
-        onPositionAdjust(positionDelta);
+      if (resizeDirection.includes("s")) {
+        newHeight = elementStartSize.current.height + deltaY;
       }
-    }
-    
-    lastSize.current = constrainedSize;
-    setSize(constrainedSize);
-  }, [isResizing, resizeDirection, constrainSize, onPositionAdjust]);
+      if (resizeDirection.includes("n")) {
+        newHeight = elementStartSize.current.height - deltaY;
+      }
+
+      const constrainedSize = constrainSize({
+        width: newWidth,
+        height: newHeight,
+      });
+
+      if (
+        onPositionAdjust &&
+        (resizeDirection.includes("w") || resizeDirection.includes("n"))
+      ) {
+        const positionDelta = { x: 0, y: 0 };
+
+        if (resizeDirection.includes("w")) {
+          positionDelta.x = lastSize.current.width - constrainedSize.width;
+        }
+        if (resizeDirection.includes("n")) {
+          positionDelta.y = lastSize.current.height - constrainedSize.height;
+        }
+
+        if (positionDelta.x !== 0 || positionDelta.y !== 0) {
+          onPositionAdjust(positionDelta);
+        }
+      }
+
+      lastSize.current = constrainedSize;
+      setSize(constrainedSize);
+    },
+    [isResizing, resizeDirection, constrainSize, onPositionAdjust],
+  );
 
   const handleMouseUp = useCallback(() => {
     if (!isResizing) return;
-    
+
     setIsResizing(false);
     setResizeDirection(null);
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
-    
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+
     if (onResizeEnd) {
       onResizeEnd();
     }
@@ -126,12 +144,12 @@ export function useResizable({
 
   useEffect(() => {
     if (isResizing) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-      
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+
       return () => {
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
       };
     }
   }, [isResizing, handleMouseMove, handleMouseUp]);
@@ -155,16 +173,16 @@ export function useResizable({
 
 function getCursorForDirection(direction) {
   const cursors = {
-    'n': 'ns-resize',
-    's': 'ns-resize',
-    'e': 'ew-resize',
-    'w': 'ew-resize',
-    'ne': 'nesw-resize',
-    'nw': 'nwse-resize',
-    'se': 'nwse-resize',
-    'sw': 'nesw-resize',
+    n: "ns-resize",
+    s: "ns-resize",
+    e: "ew-resize",
+    w: "ew-resize",
+    ne: "nesw-resize",
+    nw: "nwse-resize",
+    se: "nwse-resize",
+    sw: "nesw-resize",
   };
-  return cursors[direction] || 'default';
+  return cursors[direction] || "default";
 }
 
 export default useResizable;
