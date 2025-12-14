@@ -92,7 +92,6 @@ function registerHotkeys() {
 
   // Toggle transcript: Cmd+;
   globalShortcut.register("CommandOrControl+;", () => {
-    console.log("[Main] CommandOrControl+; pressed");
     if (overlayWindow) {
       overlayWindow.webContents.send("toggle-transcript");
     }

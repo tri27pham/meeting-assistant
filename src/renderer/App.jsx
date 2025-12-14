@@ -30,7 +30,7 @@ function App() {
   const [showTranscript, setShowTranscript] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAiResponse, setShowAiResponse] = useState(true);
-
+  
   const defaultPositions = useMemo(() => {
     const screenWidth = window.innerWidth;
     const screenHeight = window.innerHeight;
@@ -38,7 +38,7 @@ function App() {
     const containerPadding = 16;
     const margin = 32;
     const topOffset = Math.floor(screenHeight * 0.1);
-
+    
     return {
       controlBar: {
         x: 0,
@@ -66,7 +66,7 @@ function App() {
       },
     };
   }, [layoutKey]);
-
+  
   const [insights, setInsights] = useState({
     title: "Discussion about news",
     summary:
@@ -202,7 +202,7 @@ function App() {
           });
         } catch (err) {
           console.error("[App] Error triggering AI action:", err);
-        }
+      }
       }
     }
   }, [showAiResponse]);
@@ -215,13 +215,13 @@ function App() {
 
   const handleActionSelect = useCallback(
     async (actionId) => {
-      setSelectedAction(actionId);
-      const action = actions.find((a) => a.id === actionId);
-      if (action && window.cluely) {
+    setSelectedAction(actionId);
+    const action = actions.find((a) => a.id === actionId);
+    if (action && window.cluely) {
         await window.cluely.ai.triggerAction(action.type, {
           label: action.label,
         });
-      }
+    }
     },
     [actions],
   );
@@ -267,7 +267,7 @@ function App() {
 
   return (
     <div className="overlay-container">
-      <DraggablePanel
+      <DraggablePanel 
         key={`control-bar-${layoutKey}`}
         panelId="control-bar"
         initialPosition={defaultPositions.controlBar}
@@ -285,7 +285,7 @@ function App() {
           onOpenSettings={handleToggleSettings}
         />
       </DraggablePanel>
-
+      
       <DraggablePanel
         key={`live-insights-${layoutKey}`}
         panelId="live-insights"
@@ -305,7 +305,7 @@ function App() {
       </DraggablePanel>
 
       {showAiResponse && (
-        <DraggablePanel
+        <DraggablePanel 
           key={`ai-response-${layoutKey}`}
           panelId="ai-response"
           initialPosition={defaultPositions.aiResponse}
@@ -321,7 +321,7 @@ function App() {
           />
         </DraggablePanel>
       )}
-
+      
       {showTranscript && (
         <DraggablePanel
           key={`transcript-${layoutKey}`}
@@ -349,7 +349,7 @@ function App() {
           <SettingsPanel onClose={handleCloseSettings} />
         </DraggablePanel>
       )}
-
+      
       <div className="shortcuts-hint">
         <kbd>⌘</kbd>
         <kbd>/</kbd> show/hide · <kbd>⌘</kbd>

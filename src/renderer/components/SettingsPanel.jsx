@@ -54,8 +54,8 @@ function SettingsPanel({ onClose }) {
           <span>Settings</span>
         </div>
         <div className="panel-actions">
-          <button
-            className="header-btn icon-only close-btn"
+          <button 
+            className="header-btn icon-only close-btn" 
             onClick={onClose}
             aria-label="Close"
           >
