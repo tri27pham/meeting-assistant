@@ -27,6 +27,13 @@ contextBridge.exposeInMainWorld("cluely", {
     mouseLeavePanel: () => ipcRenderer.send("mouse:leave-panel"),
   },
 
+  // Audio capture (from renderer to main)
+  audio: {
+    sendMicrophoneChunk: (audioData) => {
+      ipcRenderer.send("audio:microphone-chunk", audioData);
+    },
+  },
+
   // Event listeners for backend → UI communication
   on: {
     // Receive transcript updates from backend
