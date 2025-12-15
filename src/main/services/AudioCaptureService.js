@@ -1,0 +1,264 @@
+const EventEmitter = require('events');
+const AudioConverter = require('./AudioConverter');
+const audioConfig = require('../config/audioConfig');
+
+/**
+ * Audio Capture Service
+ * 
+ * Manages audio capture from multiple sources:
+ * - System audio (electron-audio-loopback)
+ * - Microphone (via IPC from renderer process)
+ * 
+ * Merges audio streams, converts to Deepgram format, and provides streamable output
+ */
+class AudioCaptureService extends EventEmitter {
+  constructor() {
+    super();
+    this.converter = new AudioConverter();
+    this.isCapturing = false;
+    this.isPaused = false;
+
+    // System audio capture
+    this.systemAudioStream = null;
+    this.systemAudioBuffer = [];
+
+    // Microphone audio (received via IPC)
+    this.microphoneBuffer = [];
+    this.lastMicrophoneTimestamp = 0;
+
+    // Mixed audio buffer (ready for Deepgram)
+    this.outputBuffer = [];
+    this.bufferSize = audioConfig.buffer.chunkSize;
+
+    // Mixing configuration
+    this.mixingMode = audioConfig.mixing.mode;
+    this.systemVolume = audioConfig.mixing.systemVolume;
+    this.microphoneVolume = audioConfig.mixing.microphoneVolume;
+  }
+
+  /**
+   * Start audio capture
+   * @param {Object} options - Capture options
+   * @param {boolean} options.systemAudio - Enable system audio capture
+   * @param {boolean} options.microphone - Enable microphone capture
+   */
+  async start(options = {}) {
+    if (this.isCapturing) {
+      console.warn('[AudioCaptureService] Already capturing');
+      return;
+    }
+
+    const { systemAudio = true, microphone = true } = options;
+
+    try {
+      this.isCapturing = true;
+      this.isPaused = false;
+
+      // Start system audio capture if enabled
+      if (systemAudio && audioConfig.systemAudio.enabled) {
+        await this._startSystemAudio();
+      }
+
+      // Microphone is handled by renderer process via IPC
+      // We just need to be ready to receive chunks
+      if (microphone && audioConfig.microphone.enabled) {
+        this.microphoneBuffer = [];
+        this.lastMicrophoneTimestamp = 0;
+      }
+
+      this.emit('started');
+      console.log('[AudioCaptureService] Audio capture started');
+    } catch (error) {
+      this.isCapturing = false;
+      this.emit('error', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Stop audio capture
+   */
+  async stop() {
+    if (!this.isCapturing) {
+      return;
+    }
+
+    try {
+      // Stop system audio
+      await this._stopSystemAudio();
+
+      // Clear buffers
+      this.systemAudioBuffer = [];
+      this.microphoneBuffer = [];
+      this.outputBuffer = [];
+
+      this.isCapturing = false;
+      this.isPaused = false;
+
+      this.emit('stopped');
+      console.log('[AudioCaptureService] Audio capture stopped');
+    } catch (error) {
+      this.emit('error', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Pause audio capture (keep streams open but don't process)
+   */
+  pause() {
+    if (!this.isCapturing) return;
+    this.isPaused = true;
+    this.emit('paused');
+  }
+
+  /**
+   * Resume audio capture
+   */
+  resume() {
+    if (!this.isCapturing) return;
+    this.isPaused = false;
+    this.emit('resumed');
+  }
+
+  /**
+   * Handle microphone audio chunk from renderer process
+   * @param {Object} chunkData - Audio chunk data from IPC
+   * @param {Array} chunkData.data - Audio samples (Float32Array converted to array)
+   * @param {number} chunkData.sampleRate - Sample rate (typically 48000)
+   * @param {number} chunkData.channels - Channel count (1 or 2)
+   * @param {string} chunkData.bitDepth - Bit depth ('float32')
+   * @param {number} chunkData.timestamp - Timestamp
+   */
+  onMicrophoneData(chunkData) {
+    if (!this.isCapturing || this.isPaused) return;
+
+    try {
+      // Convert array back to Float32Array
+      const float32Data = new Float32Array(chunkData.data);
+
+      // Store in buffer with format info
+      this.microphoneBuffer.push({
+        data: float32Data,
+        format: {
+          sampleRate: chunkData.sampleRate || 48000,
+          channels: chunkData.channels || 1,
+          bitDepth: chunkData.bitDepth || 'float32',
+        },
+        timestamp: chunkData.timestamp || Date.now(),
+      });
+
+      this.lastMicrophoneTimestamp = chunkData.timestamp || Date.now();
+
+      // Process and emit if we have enough data
+      this._processBuffers();
+    } catch (error) {
+      console.error('[AudioCaptureService] Error processing microphone data:', error);
+      this.emit('error', error);
+    }
+  }
+
+  /**
+   * Start system audio capture
+   * @private
+   */
+  async _startSystemAudio() {
+    try {
+      // Note: electron-audio-loopback provides MediaStream in renderer
+      // For main process, we may need to use a different approach
+      // For now, we'll set up the structure and handle it via IPC if needed
+      // or use a native module like audioteejs if electron-audio-loopback doesn't work in main
+      
+      // TODO: Implement system audio capture
+      // This might require:
+      // 1. Using electron-audio-loopback in renderer and sending via IPC
+      // 2. Using a native module like audioteejs in main process
+      // 3. Using Electron's desktopCapturer API
+      
+      console.log('[AudioCaptureService] System audio capture setup (to be implemented)');
+      this.systemAudioStream = true; // Placeholder
+    } catch (error) {
+      console.error('[AudioCaptureService] Error starting system audio:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Stop system audio capture
+   * @private
+   */
+  async _stopSystemAudio() {
+    try {
+      if (this.systemAudioStream) {
+        // Cleanup system audio stream
+        this.systemAudioStream = null;
+        this.systemAudioBuffer = [];
+      }
+    } catch (error) {
+      console.error('[AudioCaptureService] Error stopping system audio:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Process audio buffers and emit converted chunks
+   * @private
+   */
+  _processBuffers() {
+    if (this.isPaused) return;
+
+    // For now, process microphone audio only
+    // System audio processing will be added when system audio capture is implemented
+    if (this.microphoneBuffer.length === 0) return;
+
+    // Process microphone buffer
+    while (this.microphoneBuffer.length > 0) {
+      const micChunk = this.microphoneBuffer.shift();
+
+      // Convert microphone audio to Deepgram format
+      const converted = this.converter.convert(micChunk.data, micChunk.format);
+
+      // Apply volume
+      if (this.microphoneVolume !== 1.0) {
+        for (let i = 0; i < converted.length; i++) {
+          converted[i] = Math.round(converted[i] * this.microphoneVolume);
+          // Clamp to prevent overflow
+          converted[i] = Math.max(-32768, Math.min(32767, converted[i]));
+        }
+      }
+
+      // Emit converted audio chunk for Deepgram
+      this.emit('audioChunk', {
+        data: converted,
+        format: this.converter.getTargetFormat(),
+        timestamp: micChunk.timestamp,
+      });
+    }
+  }
+
+  /**
+   * Get current capture state
+   * @returns {Object} Capture state
+   */
+  getState() {
+    return {
+      isCapturing: this.isCapturing,
+      isPaused: this.isPaused,
+      hasSystemAudio: this.systemAudioStream !== null,
+      microphoneBufferSize: this.microphoneBuffer.length,
+      systemAudioBufferSize: this.systemAudioBuffer.length,
+    };
+  }
+
+  /**
+   * Update mixing configuration
+   * @param {Object} config - Mixing configuration
+   */
+  updateMixingConfig(config) {
+    if (config.mode) this.mixingMode = config.mode;
+    if (config.systemVolume !== undefined) this.systemVolume = config.systemVolume;
+    if (config.microphoneVolume !== undefined) this.microphoneVolume = config.microphoneVolume;
+  }
+}
+
+module.exports = AudioCaptureService;
