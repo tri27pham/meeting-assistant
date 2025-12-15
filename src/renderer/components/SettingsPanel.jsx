@@ -44,8 +44,9 @@ function ChevronIcon({ isExpanded }) {
   );
 }
 
-function SettingsPanel({ onClose }) {
+function SettingsPanel({ onClose, showAudioMeter, onToggleAudioMeter }) {
   const [isHotkeysExpanded, setIsHotkeysExpanded] = useState(true);
+  const [isDisplayExpanded, setIsDisplayExpanded] = useState(true);
 
   return (
     <div className="settings-panel glass-panel">
@@ -91,6 +92,33 @@ function SettingsPanel({ onClose }) {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+
+        <div className="settings-section">
+          <button
+            className="settings-section-header"
+            onClick={() => setIsDisplayExpanded(!isDisplayExpanded)}
+            aria-expanded={isDisplayExpanded}
+          >
+            <h3 className="settings-section-title">Display</h3>
+            <ChevronIcon isExpanded={isDisplayExpanded} />
+          </button>
+          <div
+            className={`hotkeys-list ${isDisplayExpanded ? "expanded" : "collapsed"}`}
+          >
+            <div className="settings-option">
+              <label className="settings-toggle-label">
+                <span>Show audio meter</span>
+                <button
+                  className={`settings-toggle ${showAudioMeter ? "active" : ""}`}
+                  onClick={() => onToggleAudioMeter(!showAudioMeter)}
+                  aria-label="Toggle audio meter visibility"
+                >
+                  <span className="settings-toggle-slider"></span>
+                </button>
+              </label>
+            </div>
           </div>
         </div>
       </div>

@@ -33,7 +33,12 @@ function App() {
   const [showTranscript, setShowTranscript] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAiResponse, setShowAiResponse] = useState(true);
-  const [showAudioMeter, setShowAudioMeter] = useState(true);
+  
+  // Load audio meter visibility preference from localStorage
+  const [showAudioMeter, setShowAudioMeter] = useState(() => {
+    const saved = localStorage.getItem('cluely-show-audio-meter');
+    return saved !== null ? saved === 'true' : true; // default to true
+  });
   
   const defaultPositions = useMemo(() => {
     const screenWidth = window.innerWidth;
@@ -70,7 +75,7 @@ function App() {
       },
       settings: {
         x: screenWidth - 400 - margin - containerPadding,
-        y: topOffset + PANEL_SIZES.aiResponse.height + 200,
+        y: topOffset + PANEL_SIZES.aiResponse.height + 16,
       },
     };
   }, [layoutKey]);
@@ -283,6 +288,11 @@ function App() {
     setShowSettings(false);
   }, []);
 
+  const handleToggleAudioMeter = useCallback((enabled) => {
+    setShowAudioMeter(enabled);
+    localStorage.setItem('cluely-show-audio-meter', enabled.toString());
+  }, []);
+
   const handleResetLayout = useCallback(() => {
     PANEL_IDS.forEach((panelId) => {
       localStorage.removeItem(`cluely-panel-pos-${panelId}`);
@@ -397,7 +407,11 @@ function App() {
           maxSize={{ width: 600, height: 700 }}
           resizable={true}
         >
-          <SettingsPanel onClose={handleCloseSettings} />
+          <SettingsPanel 
+            onClose={handleCloseSettings}
+            showAudioMeter={showAudioMeter}
+            onToggleAudioMeter={handleToggleAudioMeter}
+          />
         </DraggablePanel>
       )}
       
