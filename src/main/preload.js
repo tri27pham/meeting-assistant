@@ -83,5 +83,11 @@ contextBridge.exposeInMainWorld("cluely", {
       ipcRenderer.on("toggle-transcript", () => callback());
       return () => ipcRenderer.removeAllListeners("toggle-transcript");
     },
+
+    // Audio capture status updates (optional, for UI status display)
+    audioStatusUpdate: (callback) => {
+      ipcRenderer.on("audio:status-update", (event, status) => callback(status));
+      return () => ipcRenderer.removeAllListeners("audio:status-update");
+    },
   },
 });
