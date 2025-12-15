@@ -6,6 +6,28 @@ const {
   screen,
 } = require("electron");
 const path = require("path");
+const fs = require("fs");
+
+// Load environment variables from .env file (before importing other modules)
+try {
+  const dotenv = require("dotenv");
+  // __dirname is src/main, so go up two levels to project root
+  const envPath = path.join(__dirname, "../../.env");
+  const resolvedPath = path.resolve(envPath);
+  if (fs.existsSync(resolvedPath)) {
+    const result = dotenv.config({ path: resolvedPath });
+    if (result.error) {
+      console.warn("[Main] Error loading .env file:", result.error);
+    } else {
+      console.log("[Main] Loaded .env file from:", resolvedPath);
+      console.log("[Main] DEEPGRAM_API_KEY loaded:", process.env.DEEPGRAM_API_KEY ? "Yes" : "No");
+    }
+  } else {
+    console.warn("[Main] .env file not found at:", resolvedPath);
+  }
+} catch (e) {
+  console.warn("[Main] dotenv not available, using environment variables only:", e.message);
+}
 
 // Import services
 const AudioCaptureService = require("./services/AudioCaptureService");
@@ -183,6 +205,13 @@ function setupAudioPipeline() {
 
   deepgramService.on("error", (error) => {
     console.error("[Main] Deepgram error:", error);
+  });
+
+  // Forward audio levels to renderer
+  audioCaptureService.on("audioLevels", (levels) => {
+    if (overlayWindow) {
+      overlayWindow.webContents.send("audio:levels-update", levels);
+    }
   });
 }
 

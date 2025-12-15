@@ -34,6 +34,14 @@ class AudioCaptureService extends EventEmitter {
     this.mixingMode = audioConfig.mixing.mode;
     this.systemVolume = audioConfig.mixing.systemVolume;
     this.microphoneVolume = audioConfig.mixing.microphoneVolume;
+
+    // Audio level tracking
+    this.audioLevels = {
+      system: 0,
+      microphone: 0,
+      mixed: 0,
+    };
+    this.levelUpdateInterval = null;
   }
 
   /**
@@ -66,6 +74,11 @@ class AudioCaptureService extends EventEmitter {
         this.lastMicrophoneTimestamp = 0;
       }
 
+      // Start level update interval
+      this.levelUpdateInterval = setInterval(() => {
+        this.emit('audioLevels', { ...this.audioLevels });
+      }, 100); // Update 10 times per second
+
       this.emit('started');
       console.log('[AudioCaptureService] Audio capture started');
     } catch (error) {
@@ -91,6 +104,15 @@ class AudioCaptureService extends EventEmitter {
       this.systemAudioBuffer = [];
       this.microphoneBuffer = [];
       this.outputBuffer = [];
+
+      // Stop level updates
+      if (this.levelUpdateInterval) {
+        clearInterval(this.levelUpdateInterval);
+        this.levelUpdateInterval = null;
+      }
+      
+      // Reset levels
+      this.audioLevels = { system: 0, microphone: 0, mixed: 0 };
 
       this.isCapturing = false;
       this.isPaused = false;
@@ -137,6 +159,9 @@ class AudioCaptureService extends EventEmitter {
       // Convert array back to Float32Array
       const float32Data = new Float32Array(chunkData.data);
 
+      // Calculate microphone audio level
+      this._calculateMicrophoneLevel(float32Data);
+
       // Store in buffer with format info
       this.microphoneBuffer.push({
         data: float32Data,
@@ -149,6 +174,9 @@ class AudioCaptureService extends EventEmitter {
       });
 
       this.lastMicrophoneTimestamp = chunkData.timestamp || Date.now();
+
+      // Calculate microphone audio level
+      this._calculateMicrophoneLevel(float32Data);
 
       // Process and emit if we have enough data
       this._processBuffers();
@@ -227,6 +255,9 @@ class AudioCaptureService extends EventEmitter {
         }
       }
 
+      // Calculate mixed audio level (from converted Int16Array)
+      this._calculateMixedLevel(converted);
+
       // Emit converted audio chunk for Deepgram
       this.emit('audioChunk', {
         data: converted,
@@ -234,6 +265,42 @@ class AudioCaptureService extends EventEmitter {
         timestamp: micChunk.timestamp,
       });
     }
+  }
+
+  /**
+   * Calculate microphone audio level (RMS)
+   * @private
+   */
+  _calculateMicrophoneLevel(float32Data) {
+    let sum = 0;
+    for (let i = 0; i < float32Data.length; i++) {
+      sum += float32Data[i] * float32Data[i];
+    }
+    const rms = Math.sqrt(sum / float32Data.length);
+    this.audioLevels.microphone = Math.min(1, rms * 2); // Normalize and boost
+  }
+
+  /**
+   * Calculate mixed audio level (RMS from Int16Array)
+   * @private
+   */
+  _calculateMixedLevel(int16Data) {
+    let sum = 0;
+    for (let i = 0; i < int16Data.length; i++) {
+      const normalized = int16Data[i] / 32768; // Normalize to -1 to 1
+      sum += normalized * normalized;
+    }
+    const rms = Math.sqrt(sum / int16Data.length);
+    this.audioLevels.mixed = Math.min(1, rms * 1.5); // Normalize and boost
+  }
+
+  /**
+   * Calculate system audio level (placeholder for when system audio is implemented)
+   * @private
+   */
+  _calculateSystemLevel() {
+    // TODO: Implement when system audio capture is working
+    this.audioLevels.system = 0;
   }
 
   /**

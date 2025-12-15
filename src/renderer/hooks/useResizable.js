@@ -18,7 +18,12 @@ export function useResizable({
       try {
         const saved = localStorage.getItem(storageKey);
         if (saved) {
-          return JSON.parse(saved);
+          const parsed = JSON.parse(saved);
+          // Constrain saved size to min/max bounds
+          return {
+            width: Math.max(minSize.width, Math.min(maxSize.width, parsed.width)),
+            height: Math.max(minSize.height, Math.min(maxSize.height, parsed.height)),
+          };
         }
       } catch (e) {
         console.warn("Failed to load saved size:", e);

@@ -4,7 +4,9 @@ import LiveInsightsPanel from "./components/LiveInsightsPanel";
 import AIResponsePanel from "./components/AIResponsePanel";
 import TranscriptPanel from "./components/TranscriptPanel";
 import SettingsPanel from "./components/SettingsPanel";
+import AudioMeterPanel from "./components/AudioMeterPanel";
 import DraggablePanel from "./components/DraggablePanel";
+import useMicrophoneCapture from "./hooks/useMicrophoneCapture";
 
 const PANEL_IDS = [
   "control-bar",
@@ -18,6 +20,7 @@ const PANEL_SIZES = {
   liveInsights: { width: 420, height: 400 },
   aiResponse: { width: 450, height: 380 },
   transcript: { width: 380, height: 350 },
+  audioMeter: { width: 320, height: 200 },
 };
 
 function App() {
@@ -30,6 +33,7 @@ function App() {
   const [showTranscript, setShowTranscript] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAiResponse, setShowAiResponse] = useState(true);
+  const [showAudioMeter, setShowAudioMeter] = useState(true);
   
   const defaultPositions = useMemo(() => {
     const screenWidth = window.innerWidth;
@@ -60,9 +64,13 @@ function App() {
         x: margin - containerPadding,
         y: topOffset + PANEL_SIZES.liveInsights.height + 16,
       },
+      audioMeter: {
+        x: screenWidth - 350 - margin - containerPadding,
+        y: topOffset + PANEL_SIZES.aiResponse.height + 16,
+      },
       settings: {
         x: screenWidth - 400 - margin - containerPadding,
-        y: topOffset + PANEL_SIZES.aiResponse.height + 16,
+        y: topOffset + PANEL_SIZES.aiResponse.height + 200,
       },
     };
   }, [layoutKey]);
@@ -110,6 +118,26 @@ function App() {
   });
 
   const [transcript, setTranscript] = useState([]);
+  const [audioLevels, setAudioLevels] = useState({
+    system: 0,
+    microphone: 0,
+    mixed: 0,
+  });
+
+  // Microphone capture hook
+  const microphoneCapture = useMicrophoneCapture({
+    enabled: isRunning,
+    paused: isPaused,
+    onError: (error) => {
+      console.error("[App] Microphone capture error:", error);
+    },
+    onAudioLevel: (level) => {
+      setAudioLevels((prev) => ({
+        ...prev,
+        microphone: level,
+      }));
+    },
+  });
 
   useEffect(() => {
     let interval;
@@ -126,6 +154,10 @@ function App() {
 
     const unsubTranscript = window.cluely.on.transcriptUpdate((segment) => {
       setTranscript((prev) => [...prev, segment]);
+    });
+
+    const unsubAudioLevels = window.cluely.on?.audioLevelsUpdate?.((levels) => {
+      setAudioLevels(levels);
     });
 
     const unsubSuggestion = window.cluely.on.suggestion((suggestion) => {
@@ -171,7 +203,8 @@ function App() {
     });
 
     return () => {
-      unsubTranscript?.();
+      unsubTranscript();
+      if (unsubAudioLevels) unsubAudioLevels();
       unsubSuggestion?.();
       unsubInsights?.();
       unsubTrigger?.();
@@ -255,6 +288,10 @@ function App() {
       localStorage.removeItem(`cluely-panel-pos-${panelId}`);
       localStorage.removeItem(`cluely-panel-size-${panelId}`);
     });
+    
+    // Also reset audio meter panel
+    localStorage.removeItem(`cluely-panel-pos-audio-meter`);
+    localStorage.removeItem(`cluely-panel-size-audio-meter`);
 
     setLayoutKey((prev) => prev + 1);
   }, []);
@@ -332,7 +369,21 @@ function App() {
           maxSize={{ width: 500, height: 600 }}
           resizable={true}
         >
-          <TranscriptPanel />
+          <TranscriptPanel transcript={transcript} />
+        </DraggablePanel>
+      )}
+
+      {showAudioMeter && (
+        <DraggablePanel
+          key={`audio-meter-${layoutKey}`}
+          panelId="audio-meter"
+          initialPosition={defaultPositions.audioMeter}
+          initialSize={{ width: 400, height: 60 }}
+          minSize={{ width: 300, height: 60 }}
+          maxSize={{ width: 600, height: 60 }}
+          resizable={true}
+        >
+          <AudioMeterPanel audioLevels={audioLevels} />
         </DraggablePanel>
       )}
 

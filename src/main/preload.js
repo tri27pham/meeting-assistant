@@ -89,5 +89,11 @@ contextBridge.exposeInMainWorld("cluely", {
       ipcRenderer.on("audio:status-update", (event, status) => callback(status));
       return () => ipcRenderer.removeAllListeners("audio:status-update");
     },
+
+    // Audio levels updates for audio meter panel
+    audioLevelsUpdate: (callback) => {
+      ipcRenderer.on("audio:levels-update", (event, levels) => callback(levels));
+      return () => ipcRenderer.removeAllListeners("audio:levels-update");
+    },
   },
 });

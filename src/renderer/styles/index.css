@@ -574,6 +574,40 @@ body,
   overflow: hidden;
 }
 
+.transcript-panel .panel-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--space-md);
+}
+
+.transcript-segments {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.transcript-time {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-bottom: 2px;
+}
+
+.transcript-text {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+
+.transcript-indicator {
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.5;
+  margin-top: 2px;
+}
+
 .settings-panel {
   width: 100%;
   height: 100%;
@@ -907,6 +941,7 @@ body,
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.03);
   border-left: 2px solid transparent;
+  transition: all 0.2s ease;
 }
 
 .transcript-segment.user {
@@ -1170,4 +1205,86 @@ body,
     max-width: none;
     min-width: auto;
   }
+}
+
+/* ============================================
+   Audio Meter Panel
+   ============================================ */
+
+.audio-meter-panel {
+  width: 100%;
+  height: 100%;
+  padding: 4px var(--space-lg);
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+}
+
+.audio-meter-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.audio-meter-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.audio-meter-label {
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  min-width: 45px;
+}
+
+.audio-meter-bar-container {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex: 1;
+}
+
+.audio-meter-bar-bg {
+  flex: 1;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.audio-meter-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-blue) 0%, var(--accent-purple) 100%);
+  border-radius: var(--radius-sm);
+  transition: width 0.1s ease-out;
+  box-shadow: 0 0 8px var(--accent-blue-glow);
+}
+
+.audio-meter-bar-peak {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: var(--accent-purple);
+  box-shadow: 0 0 4px var(--accent-purple-soft);
+  transition: left 0.1s ease-out;
+  pointer-events: none;
+}
+
+.audio-meter-value {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: var(--text-tertiary);
+  min-width: 28px;
+  text-align: right;
 }

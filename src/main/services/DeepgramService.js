@@ -1,4 +1,4 @@
-const { Deepgram } = require('@deepgram/sdk');
+const { createClient, LiveTranscriptionEvents } = require('@deepgram/sdk');
 const EventEmitter = require('events');
 const audioConfig = require('../config/audioConfig');
 
@@ -24,7 +24,7 @@ class DeepgramService extends EventEmitter {
     if (!apiKey) {
       console.warn('[DeepgramService] DEEPGRAM_API_KEY not configured');
     } else {
-      this.deepgram = new Deepgram(apiKey);
+      this.deepgram = createClient(apiKey);
     }
   }
 
@@ -46,7 +46,7 @@ class DeepgramService extends EventEmitter {
 
     try {
       // Create live transcription connection
-      this.liveConnection = this.deepgram.transcription.live({
+      this.liveConnection = this.deepgram.listen.live({
         model: audioConfig.deepgram.model,
         language: audioConfig.deepgram.language,
         encoding: audioConfig.deepgram.encoding,
@@ -68,7 +68,7 @@ class DeepgramService extends EventEmitter {
           reject(new Error('Connection timeout'));
         }, 10000);
 
-        this.liveConnection.once('open', () => {
+        this.liveConnection.once(LiveTranscriptionEvents.Open, () => {
           clearTimeout(timeout);
           this.isConnected = true;
           this.isStreaming = false;
@@ -77,7 +77,7 @@ class DeepgramService extends EventEmitter {
           resolve();
         });
 
-        this.liveConnection.once('error', (error) => {
+        this.liveConnection.once(LiveTranscriptionEvents.Error, (error) => {
           clearTimeout(timeout);
           reject(error);
         });
@@ -103,7 +103,7 @@ class DeepgramService extends EventEmitter {
     try {
       // Finish the stream if streaming
       if (this.isStreaming) {
-        this.liveConnection.finish();
+        this.liveConnection.requestClose();
         this.isStreaming = false;
       }
 
@@ -161,9 +161,9 @@ class DeepgramService extends EventEmitter {
     if (!this.liveConnection) return;
 
     // Handle transcript results
-    this.liveConnection.on('transcriptReceived', (transcription) => {
+    this.liveConnection.on(LiveTranscriptionEvents.Transcript, (data) => {
       try {
-        this._handleTranscript(transcription);
+        this._handleTranscript(data);
       } catch (error) {
         console.error('[DeepgramService] Error handling transcript:', error);
         this.emit('error', error);
@@ -171,14 +171,14 @@ class DeepgramService extends EventEmitter {
     });
 
     // Handle connection errors
-    this.liveConnection.on('error', (error) => {
+    this.liveConnection.on(LiveTranscriptionEvents.Error, (error) => {
       console.error('[DeepgramService] Deepgram error:', error);
       this.isConnected = false;
       this.emit('error', error);
     });
 
     // Handle connection close
-    this.liveConnection.on('close', () => {
+    this.liveConnection.on(LiveTranscriptionEvents.Close, () => {
       console.log('[DeepgramService] Connection closed');
       this.isConnected = false;
       this.isStreaming = false;
@@ -186,14 +186,14 @@ class DeepgramService extends EventEmitter {
     });
 
     // Handle metadata
-    this.liveConnection.on('metadata', (metadata) => {
+    this.liveConnection.on(LiveTranscriptionEvents.Metadata, (metadata) => {
       this.emit('metadata', metadata);
     });
 
-    // Handle warning messages
-    this.liveConnection.on('warning', (warning) => {
-      console.warn('[DeepgramService] Warning:', warning);
-      this.emit('warning', warning);
+    // Handle utterance end
+    this.liveConnection.on(LiveTranscriptionEvents.UtteranceEnd, (data) => {
+      // Optionally handle utterance end events
+      this.emit('utteranceEnd', data);
     });
   }
 
@@ -201,17 +201,15 @@ class DeepgramService extends EventEmitter {
    * Handle transcript results from Deepgram
    * @private
    */
-  _handleTranscript(transcription) {
+  _handleTranscript(data) {
     try {
-      // Parse Deepgram response
-      const result = JSON.parse(transcription);
-
-      // Extract transcript data
-      if (result.channel && result.channel.alternatives && result.channel.alternatives.length > 0) {
-        const alternative = result.channel.alternatives[0];
+      // In v3, the data is already parsed as an object
+      // Extract transcript data from the Results structure
+      if (data.channel && data.channel.alternatives && data.channel.alternatives.length > 0) {
+        const alternative = data.channel.alternatives[0];
         const transcript = alternative.transcript;
         const confidence = alternative.confidence || 0;
-        const isFinal = result.is_final || false;
+        const isFinal = data.is_final || false;
 
         // Only emit if there's actual transcript text
         if (transcript && transcript.trim().length > 0) {
@@ -219,8 +217,8 @@ class DeepgramService extends EventEmitter {
             text: transcript,
             confidence: confidence,
             isFinal: isFinal,
-            timestamp: result.start || Date.now(),
-            duration: result.duration || 0,
+            timestamp: data.start || Date.now(),
+            duration: data.duration || 0,
           };
 
           // Emit transcript event (will be sent to renderer via IPC in main.js)
@@ -229,7 +227,7 @@ class DeepgramService extends EventEmitter {
       }
     } catch (error) {
       console.error('[DeepgramService] Error parsing transcript:', error);
-      console.error('[DeepgramService] Raw transcription:', transcription);
+      console.error('[DeepgramService] Raw transcription data:', data);
     }
   }
 

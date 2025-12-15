@@ -10,7 +10,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
  * @param {Function} options.onError - Error callback
  * @returns {Object} - Capture state and controls
  */
-export function useMicrophoneCapture({ enabled = false, paused = false, onError = null }) {
+export function useMicrophoneCapture({ enabled = false, paused = false, onError = null, onAudioLevel = null }) {
   const [isCapturing, setIsCapturing] = useState(false);
   const [error, setError] = useState(null);
   const [hasPermission, setHasPermission] = useState(null);
@@ -87,6 +87,19 @@ export function useMicrophoneCapture({ enabled = false, paused = false, onError 
         const inputBuffer = event.inputBuffer;
         const inputData = inputBuffer.getChannelData(0); // Get first channel (mono)
 
+        // Calculate audio level (RMS)
+        let sum = 0;
+        for (let i = 0; i < inputData.length; i++) {
+          sum += inputData[i] * inputData[i];
+        }
+        const rms = Math.sqrt(sum / inputData.length);
+        const level = Math.min(1, rms * 2); // Normalize and boost for visibility
+
+        // Notify audio level callback
+        if (onAudioLevel) {
+          onAudioLevel(level);
+        }
+
         // Convert Float32Array to regular array for IPC transmission
         // IPC can't directly send TypedArrays, so we convert to regular array
         const audioArray = Array.from(inputData);
@@ -115,7 +128,7 @@ export function useMicrophoneCapture({ enabled = false, paused = false, onError 
       setIsCapturing(false);
       if (onError) onError(err);
     }
-  }, [enabled, isCapturing, paused, audioConstraints, onError]);
+  }, [enabled, isCapturing, paused, audioConstraints, onError, onAudioLevel]);
 
   /**
    * Stop microphone capture

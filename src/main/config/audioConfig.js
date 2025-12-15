@@ -5,16 +5,9 @@
  * Deepgram recommended format: Linear PCM, 16-bit, 16kHz, mono
  */
 
-// Load environment variables (optional - dotenv not required)
+// Environment variables should be loaded in main.js before this module is imported
 // process.env is available in Electron main process
 // You can set DEEPGRAM_API_KEY in .env file or as environment variable
-try {
-  const dotenv = require('dotenv');
-  const path = require('path');
-  dotenv.config({ path: path.join(__dirname, '../../.env') });
-} catch (e) {
-  // dotenv is optional, continue without it
-}
 
 const audioConfig = {
   // Deepgram API Configuration

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@deepgram/sdk": "^3.5.0",
+    "dotenv": "^17.2.3",
     "electron-audio-loopback": "^1.0.0",
     "electron-mac-permissions": "^2.2.2",
     "electron-store": "^8.1.0"
