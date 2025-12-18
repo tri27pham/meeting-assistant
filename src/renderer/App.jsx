@@ -14,6 +14,7 @@ const PANEL_IDS = [
   "ai-response",
   "transcript",
   "settings",
+  "audio-meter",
 ];
 
 const PANEL_SIZES = {
@@ -71,8 +72,8 @@ function App() {
         y: topOffset + PANEL_SIZES.liveInsights.height + 16,
       },
       audioMeter: {
-        x: screenWidth - 350 - margin - containerPadding,
-        y: topOffset + PANEL_SIZES.aiResponse.height + 16,
+        x: margin - containerPadding,
+        y: 16,
       },
       settings: {
         x: screenWidth - 400 - margin - containerPadding,
@@ -430,7 +431,7 @@ function App() {
           key={`audio-meter-${layoutKey}`}
           panelId="audio-meter"
           initialPosition={defaultPositions.audioMeter}
-          initialSize={{ width: 400, height: 60 }}
+          initialSize={{ width: 325, height: 60 }}
           minSize={{ width: 300, height: 60 }}
           maxSize={{ width: 600, height: 60 }}
           resizable={true}
