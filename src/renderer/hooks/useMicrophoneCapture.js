@@ -10,7 +10,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
  * @param {Function} options.onError - Error callback
  * @returns {Object} - Capture state and controls
  */
-export function useMicrophoneCapture({ enabled = false, paused = false, onError = null, onAudioLevel = null }) {
+export function useMicrophoneCapture({ enabled = false, paused = false, onError = null, onAudioLevel = null, onReady = null }) {
   const [isCapturing, setIsCapturing] = useState(false);
   const [error, setError] = useState(null);
   const [hasPermission, setHasPermission] = useState(null);
@@ -19,6 +19,7 @@ export function useMicrophoneCapture({ enabled = false, paused = false, onError 
   const audioContextRef = useRef(null);
   const sourceNodeRef = useRef(null);
   const processorNodeRef = useRef(null);
+  const hasCalledReadyRef = useRef(false);
 
   // Audio constraints (matching audioConfig.js settings)
   const audioConstraints = {
@@ -83,6 +84,12 @@ export function useMicrophoneCapture({ enabled = false, paused = false, onError 
       processor.onaudioprocess = (event) => {
         if (paused) return;
 
+        // Call onReady on first audio chunk (indicates mic is actually capturing)
+        if (!hasCalledReadyRef.current && onReady) {
+          hasCalledReadyRef.current = true;
+          onReady();
+        }
+
         // Get audio data from input buffer
         const inputBuffer = event.inputBuffer;
         const inputData = inputBuffer.getChannelData(0); // Get first channel (mono)
@@ -128,7 +135,7 @@ export function useMicrophoneCapture({ enabled = false, paused = false, onError 
       setIsCapturing(false);
       if (onError) onError(err);
     }
-  }, [enabled, isCapturing, paused, audioConstraints, onError, onAudioLevel]);
+  }, [enabled, isCapturing, paused, audioConstraints, onError, onAudioLevel, onReady]);
 
   /**
    * Stop microphone capture
@@ -137,6 +144,9 @@ export function useMicrophoneCapture({ enabled = false, paused = false, onError 
     if (!isCapturing) return;
 
     try {
+      // Reset ready flag
+      hasCalledReadyRef.current = false;
+
       // Disconnect and cleanup audio nodes
       if (processorNodeRef.current) {
         processorNodeRef.current.disconnect();

@@ -454,13 +454,31 @@ body,
   white-space: nowrap;
 }
 
-.control-btn:hover {
+.control-btn:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.1);
 }
 
-.control-btn:active {
+.control-btn:active:not(:disabled) {
   background: rgba(255, 255, 255, 0.15);
   transform: scale(0.97);
+}
+
+.control-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Circular pause/play button */

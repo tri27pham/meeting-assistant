@@ -24,8 +24,9 @@ const PANEL_SIZES = {
 };
 
 function App() {
-  const [isRunning, setIsRunning] = useState(true);
+  const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
   const [sessionTime, setSessionTime] = useState(0);
 
   const [layoutKey, setLayoutKey] = useState(0);
@@ -135,6 +136,7 @@ function App() {
     paused: isPaused,
     onError: (error) => {
       console.error("[App] Microphone capture error:", error);
+      setIsStarting(false);
     },
     onAudioLevel: (level) => {
       setAudioLevels((prev) => ({
@@ -142,35 +144,24 @@ function App() {
         microphone: level,
       }));
     },
+    onReady: () => {
+      // Mic is capturing audio, everything is ready
+      setIsStarting(false);
+      setShowTranscript(true);
+    },
   });
 
   useEffect(() => {
     let interval;
-    if (isRunning && !isPaused) {
+    if (isRunning && !isPaused && !isStarting) {
       interval = setInterval(() => {
         setSessionTime((prev) => prev + 1);
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [isRunning, isPaused]);
+  }, [isRunning, isPaused, isStarting]);
 
   // Start session on mount
-  useEffect(() => {
-    if (!window.cluely) return;
-    
-    const startSession = async () => {
-      try {
-        const result = await window.cluely.session.start();
-        if (!result.success) {
-          console.error("[App] Failed to start session:", result.error);
-        }
-      } catch (error) {
-        console.error("[App] Error starting session:", error);
-      }
-    };
-    
-    startSession();
-  }, []);
 
   useEffect(() => {
     if (!window.cluely) return;
@@ -245,11 +236,34 @@ function App() {
   }, []);
 
   const handleTogglePause = useCallback(async () => {
-    if (window.cluely) {
+    if (!window.cluely) return;
+    
+    if (!isRunning) {
+      setIsStarting(true);
+      try {
+        const result = await window.cluely.session.start();
+        if (result.success) {
+          setIsRunning(true);
+          setIsPaused(false);
+          setSessionTime(0);
+          setTranscript([]);
+          // Don't show transcript or hide spinner yet - wait for onReady callback from mic
+        } else {
+          console.error("[App] Failed to start session:", result.error);
+          setIsStarting(false);
+        }
+      } catch (error) {
+        console.error("[App] Error starting session:", error);
+        setIsStarting(false);
+      }
+    } else if (isPaused) {
       await window.cluely.session.togglePause();
+      setIsPaused(false);
+    } else {
+      await window.cluely.session.togglePause();
+      setIsPaused(true);
     }
-    setIsPaused((prev) => !prev);
-  }, []);
+  }, [isRunning, isPaused]);
 
   const handleAskAI = useCallback(async () => {
     if (showAiResponse) {
@@ -349,7 +363,9 @@ function App() {
         className="control-bar-panel"
       >
         <ControlBar
+          isRunning={isRunning}
           isPaused={isPaused}
+          isStarting={isStarting}
           sessionTime={formatTime(sessionTime)}
           onTogglePause={handleTogglePause}
           onAskAI={handleAskAI}

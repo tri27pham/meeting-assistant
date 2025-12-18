@@ -1,8 +1,10 @@
 import React from "react";
-import { PauseIcon, PlayIcon, WaveformIcon, SettingsIcon } from "./Icons";
+import { PauseIcon, PlayIcon, WaveformIcon, SettingsIcon, LoadingIcon } from "./Icons";
 
 function ControlBar({
+  isRunning,
   isPaused,
+  isStarting,
   sessionTime,
   onTogglePause,
   onAskAI,
@@ -10,18 +12,21 @@ function ControlBar({
   onResetLayout,
   onOpenSettings,
 }) {
+  const showPlayIcon = !isRunning || isPaused;
+  
   return (
     <div className="control-bar glass-panel">
       <div className="control-group">
         <button
           className="control-btn pause-btn"
           onClick={onTogglePause}
-          aria-label={isPaused ? "Resume" : "Pause"}
+          aria-label={isStarting ? "Starting..." : showPlayIcon ? "Start/Resume" : "Pause"}
+          disabled={isStarting}
         >
-          {isPaused ? <PlayIcon /> : <PauseIcon />}
+          {isStarting ? <LoadingIcon /> : showPlayIcon ? <PlayIcon /> : <PauseIcon />}
         </button>
 
-        <div className={`waveform-indicator ${isPaused ? "paused" : ""}`}>
+        <div className={`waveform-indicator ${!isRunning || isPaused || isStarting ? "paused" : ""}`}>
           <WaveformIcon />
         </div>
 
