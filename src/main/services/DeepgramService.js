@@ -59,7 +59,7 @@ class DeepgramService extends EventEmitter {
         endpointing: audioConfig.deepgram.endpointing,
       });
 
-      // Set up event listeners
+      // Set up event listeners BEFORE waiting for connection
       this._setupEventListeners();
 
       // Wait for connection to open
@@ -179,7 +179,6 @@ class DeepgramService extends EventEmitter {
 
     // Handle connection close
     this.liveConnection.on(LiveTranscriptionEvents.Close, () => {
-      console.log('[DeepgramService] Connection closed');
       this.isConnected = false;
       this.isStreaming = false;
       this.emit('closed');
@@ -192,7 +191,6 @@ class DeepgramService extends EventEmitter {
 
     // Handle utterance end
     this.liveConnection.on(LiveTranscriptionEvents.UtteranceEnd, (data) => {
-      // Optionally handle utterance end events
       this.emit('utteranceEnd', data);
     });
   }
@@ -203,27 +201,48 @@ class DeepgramService extends EventEmitter {
    */
   _handleTranscript(data) {
     try {
-      // In v3, the data is already parsed as an object
-      // Extract transcript data from the Results structure
+      // In v3, the data structure may vary - check different possible structures
+      let transcript = null;
+      let confidence = 0;
+      let isFinal = false;
+      let timestamp = Date.now();
+      let duration = 0;
+
+      // Try different data structures
       if (data.channel && data.channel.alternatives && data.channel.alternatives.length > 0) {
         const alternative = data.channel.alternatives[0];
-        const transcript = alternative.transcript;
-        const confidence = alternative.confidence || 0;
-        const isFinal = data.is_final || false;
+        transcript = alternative.transcript;
+        confidence = alternative.confidence || 0;
+        isFinal = data.is_final || false;
+        timestamp = data.start || Date.now();
+        duration = data.duration || 0;
+      } else if (data.alternatives && data.alternatives.length > 0) {
+        const alternative = data.alternatives[0];
+        transcript = alternative.transcript;
+        confidence = alternative.confidence || 0;
+        isFinal = data.is_final || false;
+        timestamp = data.start || Date.now();
+        duration = data.duration || 0;
+      } else if (data.transcript) {
+        transcript = data.transcript;
+        confidence = data.confidence || 0;
+        isFinal = data.is_final || false;
+        timestamp = data.start || Date.now();
+        duration = data.duration || 0;
+      }
 
-        // Only emit if there's actual transcript text
-        if (transcript && transcript.trim().length > 0) {
-          const transcriptData = {
-            text: transcript,
-            confidence: confidence,
-            isFinal: isFinal,
-            timestamp: data.start || Date.now(),
-            duration: data.duration || 0,
-          };
+      // Only emit if there's actual transcript text
+      if (transcript && transcript.trim().length > 0) {
+        const transcriptData = {
+          text: transcript,
+          confidence: confidence,
+          isFinal: isFinal,
+          timestamp: timestamp,
+          duration: duration,
+        };
 
-          // Emit transcript event (will be sent to renderer via IPC in main.js)
-          this.emit('transcript', transcriptData);
-        }
+        // Emit transcript event (will be sent to renderer via IPC in main.js)
+        this.emit('transcript', transcriptData);
       }
     } catch (error) {
       console.error('[DeepgramService] Error parsing transcript:', error);

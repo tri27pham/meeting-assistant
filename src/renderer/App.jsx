@@ -154,6 +154,24 @@ function App() {
     return () => clearInterval(interval);
   }, [isRunning, isPaused]);
 
+  // Start session on mount
+  useEffect(() => {
+    if (!window.cluely) return;
+    
+    const startSession = async () => {
+      try {
+        const result = await window.cluely.session.start();
+        if (!result.success) {
+          console.error("[App] Failed to start session:", result.error);
+        }
+      } catch (error) {
+        console.error("[App] Error starting session:", error);
+      }
+    };
+    
+    startSession();
+  }, []);
+
   useEffect(() => {
     if (!window.cluely) return;
 
@@ -200,11 +218,7 @@ function App() {
     });
 
     const unsubToggleTranscript = window.cluely.on?.toggleTranscript?.(() => {
-      console.log("[App] Toggle transcript event received");
-      setShowTranscript((prev) => {
-        console.log("[App] Toggling transcript from", prev, "to", !prev);
-        return !prev;
-      });
+      setShowTranscript((prev) => !prev);
     });
 
     return () => {

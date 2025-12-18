@@ -151,6 +151,20 @@ function setupAudioPipeline() {
     }
   });
 
+  // Handle Deepgram connection close - attempt to reconnect
+  deepgramService.on("closed", () => {
+    // Only reconnect if audio capture is still running
+    if (audioCaptureService.isCapturing) {
+      setTimeout(async () => {
+        try {
+          await deepgramService.connect();
+        } catch (error) {
+          console.error("[Main] Failed to reconnect to Deepgram:", error);
+        }
+      }, 2000);
+    }
+  });
+
   // Handle audio capture events
   audioCaptureService.on("started", () => {
     if (overlayWindow) {
@@ -249,7 +263,6 @@ function setupIPC() {
         microphone: true,
       });
 
-      console.log("[Main] Session started");
       return { success: true };
     } catch (error) {
       console.error("[Main] Error starting session:", error);
@@ -265,7 +278,6 @@ function setupIPC() {
       // Disconnect from Deepgram
       await deepgramService.disconnect();
 
-      console.log("[Main] Session stopped");
       return { success: true };
     } catch (error) {
       console.error("[Main] Error stopping session:", error);
@@ -277,11 +289,9 @@ function setupIPC() {
     try {
       if (audioCaptureService.isPaused) {
         audioCaptureService.resume();
-        console.log("[Main] Session resumed");
         return { success: true, paused: false };
       } else {
         audioCaptureService.pause();
-        console.log("[Main] Session paused");
         return { success: true, paused: true };
       }
     } catch (error) {
@@ -293,7 +303,6 @@ function setupIPC() {
   // AI actions
   ipcMain.handle("ai:trigger-action", async (event, actionType, metadata) => {
     // TODO: Integrate with AI Orchestration service
-    console.log("[Main] AI action triggered:", actionType, metadata);
     return { success: true };
   });
 

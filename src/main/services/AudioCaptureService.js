@@ -203,7 +203,6 @@ class AudioCaptureService extends EventEmitter {
       // 2. Using a native module like audioteejs in main process
       // 3. Using Electron's desktopCapturer API
       
-      console.log('[AudioCaptureService] System audio capture setup (to be implemented)');
       this.systemAudioStream = true; // Placeholder
     } catch (error) {
       console.error('[AudioCaptureService] Error starting system audio:', error);
