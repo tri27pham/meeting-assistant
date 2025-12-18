@@ -2,15 +2,6 @@ const { createClient, LiveTranscriptionEvents } = require('@deepgram/sdk');
 const EventEmitter = require('events');
 const audioConfig = require('../config/audioConfig');
 
-/**
- * Deepgram Service
- * 
- * Manages Deepgram WebSocket connection for real-time speech-to-text transcription
- * - Establishes WebSocket connection
- * - Streams audio chunks in real-time
- * - Receives transcription results
- * - Emits transcript events via IPC
- */
 class DeepgramService extends EventEmitter {
   constructor() {
     super();
@@ -19,7 +10,6 @@ class DeepgramService extends EventEmitter {
     this.isConnected = false;
     this.isStreaming = false;
 
-    // Initialize Deepgram client
     const apiKey = audioConfig.deepgram.apiKey;
     if (!apiKey) {
       console.warn('[DeepgramService] DEEPGRAM_API_KEY not configured');
@@ -28,10 +18,6 @@ class DeepgramService extends EventEmitter {
     }
   }
 
-  /**
-   * Connect to Deepgram WebSocket API
-   * @returns {Promise<boolean>} True if connected successfully
-   */
   async connect() {
     if (!this.deepgram) {
       const error = new Error('Deepgram API key not configured');
@@ -45,7 +31,6 @@ class DeepgramService extends EventEmitter {
     }
 
     try {
-      // Create live transcription connection
       this.liveConnection = this.deepgram.listen.live({
         model: audioConfig.deepgram.model,
         language: audioConfig.deepgram.language,
@@ -59,10 +44,8 @@ class DeepgramService extends EventEmitter {
         endpointing: audioConfig.deepgram.endpointing,
       });
 
-      // Set up event listeners BEFORE waiting for connection
       this._setupEventListeners();
 
-      // Wait for connection to open
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
           reject(new Error('Connection timeout'));
@@ -92,22 +75,17 @@ class DeepgramService extends EventEmitter {
     }
   }
 
-  /**
-   * Disconnect from Deepgram
-   */
   async disconnect() {
     if (!this.isConnected || !this.liveConnection) {
       return;
     }
 
     try {
-      // Finish the stream if streaming
       if (this.isStreaming) {
         this.liveConnection.requestClose();
         this.isStreaming = false;
       }
 
-      // Close connection
       this.liveConnection = null;
       this.isConnected = false;
 
@@ -119,13 +97,6 @@ class DeepgramService extends EventEmitter {
     }
   }
 
-  /**
-   * Stream audio chunk to Deepgram
-   * @param {Object} chunk - Audio chunk data
-   * @param {Int16Array|Buffer} chunk.data - Audio data (16-bit PCM)
-   * @param {Object} chunk.format - Audio format
-   * @param {number} chunk.timestamp - Timestamp
-   */
   streamAudio(chunk) {
     if (!this.isConnected || !this.liveConnection) {
       console.warn('[DeepgramService] Not connected, cannot stream audio');
@@ -133,7 +104,6 @@ class DeepgramService extends EventEmitter {
     }
 
     try {
-      // Convert Int16Array to Buffer if needed
       let audioBuffer;
       if (chunk.data instanceof Int16Array) {
         audioBuffer = Buffer.from(chunk.data.buffer);
@@ -144,7 +114,6 @@ class DeepgramService extends EventEmitter {
         return;
       }
 
-      // Send audio data to Deepgram
       this.liveConnection.send(audioBuffer);
       this.isStreaming = true;
     } catch (error) {
@@ -153,14 +122,9 @@ class DeepgramService extends EventEmitter {
     }
   }
 
-  /**
-   * Set up Deepgram event listeners
-   * @private
-   */
   _setupEventListeners() {
     if (!this.liveConnection) return;
 
-    // Handle transcript results
     this.liveConnection.on(LiveTranscriptionEvents.Transcript, (data) => {
       try {
         this._handleTranscript(data);
@@ -170,45 +134,35 @@ class DeepgramService extends EventEmitter {
       }
     });
 
-    // Handle connection errors
     this.liveConnection.on(LiveTranscriptionEvents.Error, (error) => {
       console.error('[DeepgramService] Deepgram error:', error);
       this.isConnected = false;
       this.emit('error', error);
     });
 
-    // Handle connection close
     this.liveConnection.on(LiveTranscriptionEvents.Close, () => {
       this.isConnected = false;
       this.isStreaming = false;
       this.emit('closed');
     });
 
-    // Handle metadata
     this.liveConnection.on(LiveTranscriptionEvents.Metadata, (metadata) => {
       this.emit('metadata', metadata);
     });
 
-    // Handle utterance end
     this.liveConnection.on(LiveTranscriptionEvents.UtteranceEnd, (data) => {
       this.emit('utteranceEnd', data);
     });
   }
 
-  /**
-   * Handle transcript results from Deepgram
-   * @private
-   */
   _handleTranscript(data) {
     try {
-      // In v3, the data structure may vary - check different possible structures
       let transcript = null;
       let confidence = 0;
       let isFinal = false;
       let timestamp = Date.now();
       let duration = 0;
 
-      // Try different data structures
       if (data.channel && data.channel.alternatives && data.channel.alternatives.length > 0) {
         const alternative = data.channel.alternatives[0];
         transcript = alternative.transcript;
@@ -231,7 +185,6 @@ class DeepgramService extends EventEmitter {
         duration = data.duration || 0;
       }
 
-      // Only emit if there's actual transcript text
       if (transcript && transcript.trim().length > 0) {
         const transcriptData = {
           text: transcript,
@@ -241,7 +194,6 @@ class DeepgramService extends EventEmitter {
           duration: duration,
         };
 
-        // Emit transcript event (will be sent to renderer via IPC in main.js)
         this.emit('transcript', transcriptData);
       }
     } catch (error) {
@@ -250,10 +202,6 @@ class DeepgramService extends EventEmitter {
     }
   }
 
-  /**
-   * Get connection status
-   * @returns {Object} Connection status
-   */
   getStatus() {
     return {
       isConnected: this.isConnected,
@@ -262,10 +210,6 @@ class DeepgramService extends EventEmitter {
     };
   }
 
-  /**
-   * Check if service is ready (has API key and can connect)
-   * @returns {boolean}
-   */
   isReady() {
     return !!audioConfig.deepgram.apiKey;
   }

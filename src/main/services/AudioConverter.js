@@ -1,41 +1,19 @@
 const audioConfig = require('../config/audioConfig');
 
-/**
- * Audio Converter Service
- * 
- * Converts audio from various formats to Deepgram-compatible format:
- * - Linear PCM, 16-bit signed integer, 16kHz, mono
- * 
- * Handles:
- * - Resampling (e.g., 48kHz -> 16kHz)
- * - Channel conversion (stereo -> mono)
- * - Bit depth conversion (Float32 -> Int16)
- */
 class AudioConverter {
   constructor() {
-    this.targetSampleRate = audioConfig.audioFormat.sampleRate; // 16000
-    this.targetChannels = audioConfig.audioFormat.channels; // 1 (mono)
-    this.targetBitDepth = audioConfig.audioFormat.bitDepth; // 16
+    this.targetSampleRate = audioConfig.audioFormat.sampleRate;
+    this.targetChannels = audioConfig.audioFormat.channels;
+    this.targetBitDepth = audioConfig.audioFormat.bitDepth;
   }
 
-  /**
-   * Convert audio buffer to Deepgram-compatible format
-   * @param {Float32Array|Buffer} audioData - Input audio data
-   * @param {Object} inputFormat - Input format specification
-   * @param {number} inputFormat.sampleRate - Input sample rate (e.g., 48000)
-   * @param {number} inputFormat.channels - Input channel count (1 or 2)
-   * @param {string} inputFormat.bitDepth - Input bit depth ('float32' or 'int16')
-   * @returns {Int16Array} Converted audio data in 16-bit PCM, 16kHz, mono
-   */
   convert(audioData, inputFormat) {
     let float32Data = this._toFloat32Array(audioData, inputFormat.bitDepth);
     
-    // Convert stereo to mono if needed
     if (inputFormat.channels === 2) {
       float32Data = this._stereoToMono(float32Data);
     }
 
-    // Resample if needed
     if (inputFormat.sampleRate !== this.targetSampleRate) {
       float32Data = this._resample(
         float32Data,
@@ -44,16 +22,11 @@ class AudioConverter {
       );
     }
 
-    // Convert Float32 to Int16
     const int16Data = this._float32ToInt16(float32Data);
 
     return int16Data;
   }
 
-  /**
-   * Convert audio data to Float32Array
-   * @private
-   */
   _toFloat32Array(audioData, bitDepth) {
     if (audioData instanceof Float32Array) {
       return audioData;

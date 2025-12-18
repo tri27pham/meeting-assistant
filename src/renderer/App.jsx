@@ -176,7 +176,19 @@ function App() {
     if (!window.cluely) return;
 
     const unsubTranscript = window.cluely.on.transcriptUpdate((segment) => {
-      setTranscript((prev) => [...prev, segment]);
+      setTranscript((prev) => {
+        // If it's an interim result, replace the last interim segment
+        if (!segment.isFinal) {
+          // Remove last interim segment if it exists
+          const withoutLastInterim = prev.filter((s, i) => 
+            i !== prev.length - 1 || s.isFinal
+          );
+          return [...withoutLastInterim, segment];
+        }
+        // If it's final, remove any interim and add the final version
+        const withoutInterim = prev.filter(s => s.isFinal);
+        return [...withoutInterim, segment];
+      });
     });
 
     const unsubAudioLevels = window.cluely.on?.audioLevelsUpdate?.((levels) => {
