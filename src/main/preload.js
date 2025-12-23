@@ -68,20 +68,20 @@ contextBridge.exposeInMainWorld("cluely", {
 
     // Manual trigger from hotkey
     triggerAISuggestion: (callback) => {
-      ipcRenderer.on("trigger-ai-suggestion", () => callback());
-      return () => ipcRenderer.removeAllListeners("trigger-ai-suggestion");
+      ipcRenderer.on("ai:trigger-suggestion", () => callback());
+      return () => ipcRenderer.removeAllListeners("ai:trigger-suggestion");
     },
 
     // Reset layout trigger from hotkey
     resetLayout: (callback) => {
-      ipcRenderer.on("reset-layout", () => callback());
-      return () => ipcRenderer.removeAllListeners("reset-layout");
+      ipcRenderer.on("layout:reset", () => callback());
+      return () => ipcRenderer.removeAllListeners("layout:reset");
     },
 
     // Toggle transcript trigger from hotkey
     toggleTranscript: (callback) => {
-      ipcRenderer.on("toggle-transcript", () => callback());
-      return () => ipcRenderer.removeAllListeners("toggle-transcript");
+      ipcRenderer.on("transcript:toggle", () => callback());
+      return () => ipcRenderer.removeAllListeners("transcript:toggle");
     },
 
     // Audio capture status updates (optional, for UI status display)

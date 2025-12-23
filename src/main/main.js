@@ -96,19 +96,19 @@ function registerHotkeys() {
 
   globalShortcut.register("CommandOrControl+Return", () => {
     if (overlayWindow) {
-      overlayWindow.webContents.send("trigger-ai-suggestion");
+      overlayWindow.webContents.send("ai:trigger-suggestion");
     }
   });
 
   globalShortcut.register("CommandOrControl+\\", () => {
     if (overlayWindow) {
-      overlayWindow.webContents.send("reset-layout");
+      overlayWindow.webContents.send("layout:reset");
     }
   });
 
   globalShortcut.register("CommandOrControl+;", () => {
     if (overlayWindow) {
-      overlayWindow.webContents.send("toggle-transcript");
+      overlayWindow.webContents.send("transcript:toggle");
     }
   });
 }
@@ -127,11 +127,23 @@ function setupAudioPipeline() {
     }
   });
 
-  deepgramService.on("transcript", (transcriptData) => {
+  // Listen for both partial and final transcript events
+  deepgramService.on("transcript:partial", (transcriptData) => {
     if (overlayWindow) {
       overlayWindow.webContents.send("transcript:update", {
         text: transcriptData.text,
-        isFinal: transcriptData.isFinal,
+        isFinal: false,
+        confidence: transcriptData.confidence,
+        timestamp: transcriptData.timestamp,
+      });
+    }
+  });
+
+  deepgramService.on("transcript:final", (transcriptData) => {
+    if (overlayWindow) {
+      overlayWindow.webContents.send("transcript:update", {
+        text: transcriptData.text,
+        isFinal: true,
         confidence: transcriptData.confidence,
         timestamp: transcriptData.timestamp,
       });

@@ -261,7 +261,12 @@ class DeepgramService extends EventEmitter {
           duration: duration,
         };
 
-        this.emit('transcript', transcriptData);
+        // Emit descriptive event names following service rules
+        if (isFinal) {
+          this.emit('transcript:final', transcriptData);
+        } else {
+          this.emit('transcript:partial', transcriptData);
+        }
       }
     } catch (error) {
       console.error('[DeepgramService] Error parsing transcript:', error);
