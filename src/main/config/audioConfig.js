@@ -1,0 +1,68 @@
+const audioConfig = {
+  deepgram: {
+    apiKey: process.env.DEEPGRAM_API_KEY || '',
+    apiUrl: 'wss://api.deepgram.com/v1/listen',
+    model: 'nova-2',
+    language: 'en-US',
+    encoding: 'linear16',
+    sampleRate: 16000,
+    channels: 1,
+    interimResults: true,
+    punctuate: true,
+    diarize: false,
+    smartFormat: true,
+    endpointing: 100,
+  },
+
+  audioFormat: {
+    sampleRate: 16000,
+    channels: 1,
+    bitDepth: 16,
+    byteOrder: 'little-endian',
+    format: 'linear16',
+  },
+
+  buffer: {
+    chunkSize: 1024, // 64ms latency at 16kHz
+    bufferTime: 100,
+  },
+
+  systemAudio: {
+    enabled: true,
+  },
+
+  microphone: {
+    enabled: true,
+    constraints: {
+      audio: {
+        channelCount: 1,
+        sampleRate: 48000, // Resampled to 16kHz
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    },
+  },
+
+  mixing: {
+    mode: 'mix', // 'mix', 'system-only', or 'mic-only'
+    systemVolume: 1.0,
+    microphoneVolume: 1.0,
+  },
+};
+
+function validateConfig() {
+  if (!audioConfig.deepgram.apiKey) {
+    console.warn('[AudioConfig] DEEPGRAM_API_KEY not set.');
+  }
+
+  if (audioConfig.audioFormat.sampleRate !== audioConfig.deepgram.sampleRate) {
+    console.warn(
+      `[AudioConfig] Sample rate mismatch: ${audioConfig.audioFormat.sampleRate} !== ${audioConfig.deepgram.sampleRate}`
+    );
+  }
+}
+
+validateConfig();
+
+module.exports = audioConfig;

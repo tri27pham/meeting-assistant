@@ -27,6 +27,13 @@ contextBridge.exposeInMainWorld("cluely", {
     mouseLeavePanel: () => ipcRenderer.send("mouse:leave-panel"),
   },
 
+  // Audio capture (from renderer to main)
+  audio: {
+    sendMicrophoneChunk: (audioData) => {
+      ipcRenderer.send("audio:microphone-chunk", audioData);
+    },
+  },
+
   // Event listeners for backend → UI communication
   on: {
     // Receive transcript updates from backend
@@ -75,6 +82,18 @@ contextBridge.exposeInMainWorld("cluely", {
     toggleTranscript: (callback) => {
       ipcRenderer.on("toggle-transcript", () => callback());
       return () => ipcRenderer.removeAllListeners("toggle-transcript");
+    },
+
+    // Audio capture status updates (optional, for UI status display)
+    audioStatusUpdate: (callback) => {
+      ipcRenderer.on("audio:status-update", (event, status) => callback(status));
+      return () => ipcRenderer.removeAllListeners("audio:status-update");
+    },
+
+    // Audio levels updates for audio meter panel
+    audioLevelsUpdate: (callback) => {
+      ipcRenderer.on("audio:levels-update", (event, levels) => callback(levels));
+      return () => ipcRenderer.removeAllListeners("audio:levels-update");
     },
   },
 });
