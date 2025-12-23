@@ -21,7 +21,7 @@ export function useDraggable({
           return JSON.parse(saved);
         }
       } catch (e) {
-        console.warn("Failed to load saved position:", e);
+        console.warn("[useDraggable] Failed to load saved position:", e);
       }
     }
     return initialPosition;
@@ -38,7 +38,7 @@ export function useDraggable({
       try {
         localStorage.setItem(storageKey, JSON.stringify(position));
       } catch (e) {
-        console.warn("Failed to save position:", e);
+        console.warn("[useDraggable] Failed to save position:", e);
       }
     }
   }, [position, storageKey, isDragging]);

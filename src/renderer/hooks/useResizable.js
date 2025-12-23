@@ -26,7 +26,7 @@ export function useResizable({
           };
         }
       } catch (e) {
-        console.warn("Failed to load saved size:", e);
+        console.warn("[useResizable] Failed to load saved size:", e);
       }
     }
     return initialSize;
@@ -45,7 +45,7 @@ export function useResizable({
       try {
         localStorage.setItem(storageKey, JSON.stringify(size));
       } catch (e) {
-        console.warn("Failed to save size:", e);
+        console.warn("[useResizable] Failed to save size:", e);
       }
     }
   }, [size, storageKey, isResizing]);

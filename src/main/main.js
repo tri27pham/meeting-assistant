@@ -339,7 +339,32 @@ function setupIPC() {
   });
 
   ipcMain.handle("ai:trigger-action", async (event, actionType, metadata) => {
-    return { success: true };
+    try {
+      // Validate inputs
+      if (!actionType || typeof actionType !== 'string') {
+        return {
+          success: false,
+          error: 'Invalid actionType: must be a non-empty string',
+        };
+      }
+
+      // Validate metadata if provided
+      if (metadata !== undefined && (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata))) {
+        return {
+          success: false,
+          error: 'Invalid metadata: must be an object',
+        };
+      }
+
+      // TODO: Implement actual AI action triggering
+      // This is a placeholder that will be replaced when AI services are implemented
+      console.log('[Main] AI action triggered:', { actionType, metadata });
+      
+      return { success: true };
+    } catch (error) {
+      console.error('[Main] Error triggering AI action:', error);
+      return { success: false, error: error.message };
+    }
   });
 
   ipcMain.on("window:minimize", () => {
