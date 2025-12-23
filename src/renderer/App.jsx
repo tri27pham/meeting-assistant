@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import ControlBar from "./components/ControlBar";
 import LiveInsightsPanel from "./components/LiveInsightsPanel";
+import ActionsPanel from "./components/ActionsPanel";
 import AIResponsePanel from "./components/AIResponsePanel";
 import TranscriptPanel from "./components/TranscriptPanel";
 import SettingsPanel from "./components/SettingsPanel";
@@ -11,6 +12,7 @@ import useMicrophoneCapture from "./hooks/useMicrophoneCapture";
 const PANEL_IDS = [
   "control-bar",
   "live-insights",
+  "actions",
   "ai-response",
   "transcript",
   "settings",
@@ -19,6 +21,7 @@ const PANEL_IDS = [
 
 const PANEL_SIZES = {
   liveInsights: { width: 420, height: 400 },
+  actions: { width: 420, height: 350 }, // Same width as liveInsights
   aiResponse: { width: 450, height: 380 },
   transcript: { width: 380, height: 350 },
   audioMeter: { width: 320, height: 200 },
@@ -60,6 +63,14 @@ function App() {
         x: margin - containerPadding,
         y: topOffset,
       },
+      actions: {
+        x:
+          screenWidth -
+          PANEL_SIZES.actions.width -
+          margin -
+          containerPadding,
+        y: topOffset,
+      },
       aiResponse: {
         x:
           screenWidth -
@@ -83,26 +94,18 @@ function App() {
     };
   }, [layoutKey]);
   
+  // Start with empty insights - will be populated by AI responses
   const [insights, setInsights] = useState({
-    title: "Discussion about news",
-    summary:
-      "You started talking about how there's a lot of big startup acquisitions happening",
-    context: "Neel asked you about who recently acquired Windsurf",
+    title: null,
+    summary: null,
+    context: null,
   });
 
-  // Start with empty actions - they'll be populated by AI suggestions
-  const [actions, setActions] = useState([]);
+  // Talking points for Live Insights Panel (suggested things to say)
+  const [talkingPoints, setTalkingPoints] = useState([]);
 
-  // Debug: Log when actions state changes
-  useEffect(() => {
-    console.log('[App] Actions state updated', { 
-      count: actions.length, 
-      actions,
-      actionIds: actions.map(a => a.id),
-      actionLabels: actions.map(a => a.label),
-      timestamp: Date.now()
-    });
-  }, [actions]);
+  // Follow-up actions for Actions Panel (define, get questions, etc.)
+  const [actions, setActions] = useState([]);
 
   const [selectedAction, setSelectedAction] = useState(null);
 
@@ -135,6 +138,13 @@ function App() {
     },
     onReady: () => {
       // Mic is capturing audio, everything is ready
+      try {
+        const readyTime = performance.now();
+        const startTime = sessionStartTimeRef.current || readyTime;
+        console.log(`[App] Microphone ready, total initialization: ${(readyTime - startTime).toFixed(2)}ms`);
+      } catch (e) {
+        console.log("[App] Microphone ready");
+      }
       setIsStarting(false);
       setShowTranscript(true);
     },
@@ -153,12 +163,7 @@ function App() {
   // Start session on mount
 
   useEffect(() => {
-    if (!window.cluely) {
-      console.warn('[App] window.cluely not available in useEffect');
-      return;
-    }
-
-    console.log('[App] Setting up event listeners', { hasOn: !!window.cluely.on, hasAiResponse: !!window.cluely.on?.aiResponse });
+    if (!window.cluely) return;
 
     const unsubTranscript = window.cluely.on.transcriptUpdate((segment) => {
       setTranscript((prev) => {
@@ -218,50 +223,81 @@ function App() {
       setShowTranscript((prev) => !prev);
     });
 
-    // Listen to AI response events (partial and complete)
+    // Listen to AI response events to update talking points and actions
     let unsubAIResponse = null;
     if (window.cluely && window.cluely.on && window.cluely.on.aiResponse) {
-      console.log('[App] Setting up aiResponse listener');
       unsubAIResponse = window.cluely.on.aiResponse((data) => {
-        console.log('[App] Received ai:response event', { actionType: data.actionType, isPartial: data.isPartial, suggestionCount: data.suggestions?.length });
-        
         // Accept 'suggestion' or 'suggest' action types (both are talking point suggestions)
         if ((data.actionType === 'suggestion' || data.actionType === 'suggest') && data.suggestions) {
+          // Separate talking points (general suggestions) from actions (define, get questions, etc.)
+          const newTalkingPoints = [];
+          const newActions = [];
+
+          data.suggestions.forEach((suggestion) => {
+            const label = suggestion.label || suggestion.text || 'Untitled';
+            const type = suggestion.type || 'suggest';
+            const labelLower = label.toLowerCase();
+            
+            // Categorize: actions are things like "define", "get questions", "get more information", etc.
+            // Talking points are general conversation suggestions
+            const isAction = 
+              type === 'define' || 
+              type === 'question' || 
+              labelLower.includes('define') || 
+              labelLower.includes('question') ||
+              labelLower.includes('follow-up') ||
+              labelLower.includes('follow up') ||
+              labelLower.includes('get more') ||
+              labelLower.includes('get information') ||
+              labelLower.includes('search') ||
+              labelLower.includes('look up') ||
+              labelLower.includes('explain') ||
+              labelLower.startsWith('ask ') ||
+              labelLower.startsWith('get ') ||
+              labelLower.startsWith('find ');
+            
+            if (isAction) {
+              newActions.push({
+                id: suggestion.id || `action-${Date.now()}-${newActions.length}`,
+                type,
+                label,
+                icon: suggestion.icon || (type === 'question' ? 'help-circle' : type === 'define' ? 'book' : 'lightbulb'),
+              });
+            } else {
+              newTalkingPoints.push({
+                id: suggestion.id || `talking-point-${Date.now()}-${newTalkingPoints.length}`,
+                label,
+                text: suggestion.text || label,
+              });
+            }
+          });
+
           if (data.isPartial) {
-            console.log('[App] Processing partial suggestions', { count: data.suggestions.length });
-            // Show partial suggestions immediately for faster UI updates
-            setActions((prev) => {
-              // Merge partial suggestions with existing ones
-              const partialIds = new Set(data.suggestions.map((s) => s.id));
-              const existing = prev.filter((a) => !partialIds.has(a.id));
-              return [...existing, ...data.suggestions];
-            });
+            // Merge partial suggestions
+            if (newTalkingPoints.length > 0) {
+              setTalkingPoints((prev) => {
+                const partialIds = new Set(newTalkingPoints.map((p) => p.id));
+                const existing = prev.filter((p) => !partialIds.has(p.id));
+                return [...existing, ...newTalkingPoints];
+              });
+            }
+            if (newActions.length > 0) {
+              setActions((prev) => {
+                const partialIds = new Set(newActions.map((a) => a.id));
+                const existing = prev.filter((a) => !partialIds.has(a.id));
+                return [...existing, ...newActions];
+              });
+            }
           } else {
-            console.log('[App] Processing complete suggestions', { count: data.suggestions.length, rawSuggestions: data.suggestions });
-            // Replace with complete suggestions - ensure we create a new array reference
-            const newActions = data.suggestions.map((suggestion, index) => {
-              const action = {
-                id: suggestion.id || `action-${Date.now()}-${index}`,
-                type: suggestion.type || 'suggest',
-                label: suggestion.label || suggestion.text || 'Untitled suggestion',
-                icon: suggestion.icon || 'lightbulb',
-              };
-              console.log('[App] Mapped suggestion to action', { suggestion, action });
-              return action;
-            });
-            console.log('[App] Setting actions state', { actionCount: newActions.length, actions: newActions });
-            // Force state update by creating a new array reference
-            setActions(() => [...newActions]);
+            // Replace with complete suggestions
+            if (newTalkingPoints.length > 0) {
+              setTalkingPoints(() => [...newTalkingPoints]);
+            }
+            if (newActions.length > 0) {
+              setActions(() => [...newActions]);
+            }
           }
-        } else {
-          console.warn('[App] Received ai:response but actionType is not suggestion or no suggestions', data);
         }
-      });
-    } else {
-      console.error('[App] Cannot set up aiResponse listener', {
-        hasCluely: !!window.cluely,
-        hasOn: !!(window.cluely && window.cluely.on),
-        hasAiResponse: !!(window.cluely && window.cluely.on && window.cluely.on.aiResponse),
       });
     }
 
@@ -270,7 +306,6 @@ function App() {
     if (window.cluely && window.cluely.on && window.cluely.on.aiError) {
       unsubAIError = window.cluely.on.aiError((error) => {
         console.error('[App] AI error:', error);
-        // Could show error message to user here
       });
     }
 
@@ -288,6 +323,7 @@ function App() {
   }, []);
 
   const handleTogglePause = useCallback(async () => {
+    console.log("[App] handleTogglePause called", { isRunning, isPaused, isStarting, hasCluely: !!window.cluely });
     if (!window.cluely) {
       console.error("[App] window.cluely is not available");
       return;
@@ -297,15 +333,20 @@ function App() {
       try {
         const startTime = performance.now();
         sessionStartTimeRef.current = startTime;
+        console.log("[App] Starting session...");
         setIsStarting(true);
         
+        const sessionStartTime = performance.now();
         const result = await window.cluely.session.start();
+        const sessionEndTime = performance.now();
+        console.log(`[App] session.start() took ${(sessionEndTime - sessionStartTime).toFixed(2)}ms`, result);
         
         if (result && result.success) {
           setIsRunning(true);
           setIsPaused(false);
           setSessionTime(0);
           setTranscript([]);
+          console.log("[App] Session started, waiting for microphone...");
           // Don't show transcript or hide spinner yet - wait for onReady callback from mic
         } else {
           console.error("[App] Failed to start session:", result?.error || "Unknown error");
@@ -445,10 +486,24 @@ function App() {
       >
         <LiveInsightsPanel
           insights={insights}
+          talkingPoints={talkingPoints}
+          onCopyInsights={handleCopyInsights}
+        />
+      </DraggablePanel>
+
+      <DraggablePanel
+        key={`actions-${layoutKey}`}
+        panelId="actions"
+        initialPosition={defaultPositions.actions}
+        initialSize={PANEL_SIZES.actions}
+        minSize={{ width: 320, height: 250 }}
+        maxSize={{ width: 600, height: 600 }}
+        resizable={true}
+      >
+        <ActionsPanel
           actions={actions}
           selectedAction={selectedAction}
           onActionSelect={handleActionSelect}
-          onCopyInsights={handleCopyInsights}
         />
       </DraggablePanel>
 

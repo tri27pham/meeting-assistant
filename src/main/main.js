@@ -18,6 +18,8 @@ try {
     if (result.error) {
       console.warn("[Main] Error loading .env file:", result.error);
     } else {
+      console.log("[Main] Loaded .env file from:", resolvedPath);
+      console.log("[Main] DEEPGRAM_API_KEY loaded:", process.env.DEEPGRAM_API_KEY ? "Yes" : "No");
     }
   } else {
     console.warn("[Main] .env file not found at:", resolvedPath);
@@ -78,10 +80,6 @@ function createOverlayWindow() {
 
   if (isDev) {
     overlayWindow.loadURL("http://localhost:3000");
-    // Auto-open DevTools in development mode, but in detached mode
-    overlayWindow.webContents.once('did-finish-load', () => {
-      overlayWindow.webContents.openDevTools({ mode: 'detach' });
-    });
   } else {
     overlayWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
   }
@@ -119,29 +117,6 @@ function registerHotkeys() {
       overlayWindow.webContents.send("transcript:toggle");
     }
   });
-
-  // Toggle DevTools with CommandOrControl+Shift+I (standard shortcut)
-  globalShortcut.register("CommandOrControl+Shift+I", () => {
-    if (overlayWindow) {
-      if (overlayWindow.webContents.isDevToolsOpened()) {
-        overlayWindow.webContents.closeDevTools();
-      } else {
-        // Open DevTools in a separate window to avoid blocking interaction
-        overlayWindow.webContents.openDevTools({ mode: 'detach' });
-      }
-    }
-  });
-
-  // Alternative: F12 to toggle DevTools
-  globalShortcut.register("F12", () => {
-    if (overlayWindow) {
-      if (overlayWindow.webContents.isDevToolsOpened()) {
-        overlayWindow.webContents.closeDevTools();
-      } else {
-        overlayWindow.webContents.openDevTools({ mode: 'detach' });
-      }
-    }
-  });
 }
 
 function setupAudioPipeline() {
@@ -149,6 +124,7 @@ function setupAudioPipeline() {
   audioCaptureService.on("audioChunk", (chunk) => {
     if (deepgramService.isConnected) {
       if (!firstChunkSent) {
+        console.log("[Main] First audio chunk being sent to Deepgram");
         firstChunkSent = true;
       }
       deepgramService.streamAudio(chunk);
@@ -195,6 +171,7 @@ function setupAudioPipeline() {
   deepgramService.on("closed", () => {
     if (audioCaptureService.isCapturing && !isReconnecting) {
       isReconnecting = true;
+      console.log("[Main] Deepgram connection closed, reconnecting in 2s...");
       setTimeout(async () => {
         try {
           await deepgramService.connect();
@@ -205,7 +182,9 @@ function setupAudioPipeline() {
         }
       }, 2000);
     } else if (!audioCaptureService.isCapturing) {
+      console.log("[Main] Deepgram connection closed, but audio capture is not active - not reconnecting");
     } else {
+      console.log("[Main] Deepgram connection closed, but reconnection already in progress");
     }
   });
 
@@ -268,53 +247,14 @@ function setupAudioPipeline() {
       overlayWindow.webContents.send("audio:levels-update", levels);
     }
   });
-
-  // Listen to AI response events and forward to renderer
-  aiOrchestrationService.on("ai:response", (data) => {
-    console.log('\n========== AI RESPONSE ==========');
-    console.log('[Main] Received ai:response event');
-    console.log('  Action Type:', data.actionType);
-    console.log('  Is Partial:', data.isPartial);
-    console.log('  Suggestion Count:', data.suggestions?.length || 0);
-    console.log('  Timestamp:', new Date(data.timestamp).toISOString());
-    
-    if (data.suggestions && data.suggestions.length > 0) {
-      console.log('\n  Suggestions:');
-      data.suggestions.forEach((suggestion, index) => {
-        console.log(`    ${index + 1}. [${suggestion.id}] ${suggestion.label || suggestion.text || 'NO LABEL'}`);
-        console.log(`       Type: ${suggestion.type || 'N/A'}, Icon: ${suggestion.icon || 'N/A'}`);
-      });
-    } else {
-      console.log('  ⚠️  No suggestions in response!');
-    }
-    console.log('==================================\n');
-    
-    if (overlayWindow) {
-      overlayWindow.webContents.send("ai:response", data);
-      console.log('[Main] Forwarded ai:response to renderer');
-    } else {
-      console.warn('[Main] Cannot forward ai:response - overlayWindow is null');
-    }
-  });
-
-  // Listen to AI error events and forward to renderer
-  aiOrchestrationService.on("ai:error", (error) => {
-    console.error("[Main] AI error:", error);
-    if (overlayWindow) {
-      overlayWindow.webContents.send("ai:error", {
-        message: error.message,
-        stack: error.stack,
-      });
-    }
-  });
 }
 
 function setupIPC() {
   ipcMain.handle("session:start", async () => {
-    console.log('[Main] session:start called');
     let startTime;
     try {
       startTime = performance.now();
+      console.log("[Main] session:start called");
     } catch (e) {
       console.error("[Main] Error accessing performance:", e);
       startTime = Date.now();
@@ -339,8 +279,10 @@ function setupIPC() {
       }
       try {
         permEndTime = performance.now();
+        console.log(`[Main] Permission check took ${(permEndTime - permStartTime).toFixed(2)}ms`);
       } catch (e) {
         permEndTime = Date.now();
+        console.log(`[Main] Permission check took ${(permEndTime - permStartTime)}ms`);
       }
 
       if (!deepgramService.isReady()) {
@@ -359,8 +301,10 @@ function setupIPC() {
       await deepgramService.connect();
       try {
         deepgramEndTime = performance.now();
+        console.log(`[Main] Deepgram connection took ${(deepgramEndTime - deepgramStartTime).toFixed(2)}ms`);
       } catch (e) {
         deepgramEndTime = Date.now();
+        console.log(`[Main] Deepgram connection took ${(deepgramEndTime - deepgramStartTime)}ms`);
       }
 
       let audioStartTime, audioEndTime;
@@ -375,11 +319,20 @@ function setupIPC() {
       });
       try {
         audioEndTime = performance.now();
+        console.log(`[Main] Audio capture start took ${(audioEndTime - audioStartTime).toFixed(2)}ms`);
       } catch (e) {
         audioEndTime = Date.now();
+        console.log(`[Main] Audio capture start took ${(audioEndTime - audioStartTime)}ms`);
       }
 
-      console.log('[Main] Session started successfully - ContextService and AIOrchestrationService are ready');
+      let totalTime;
+      try {
+        totalTime = performance.now() - startTime;
+        console.log(`[Main] Total session:start took ${totalTime.toFixed(2)}ms`);
+      } catch (e) {
+        totalTime = Date.now() - startTime;
+        console.log(`[Main] Total session:start took ${totalTime}ms`);
+      }
       return { success: true };
     } catch (error) {
       console.error("[Main] Error starting session:", error);
@@ -435,11 +388,49 @@ function setupIPC() {
 
       // Trigger AI action via AIOrchestrationService
       await aiOrchestrationService.triggerAction(actionType, metadata);
-      
       return { success: true };
     } catch (error) {
       console.error('[Main] Error triggering AI action:', error);
       return { success: false, error: error.message };
+    }
+  });
+
+  // Listen to AI response events and forward to renderer
+  aiOrchestrationService.on("ai:response", (data) => {
+    console.log('\n========== AI RESPONSE ==========');
+    console.log('[Main] Received ai:response event');
+    console.log('  Action Type:', data.actionType);
+    console.log('  Is Partial:', data.isPartial);
+    console.log('  Suggestion Count:', data.suggestions?.length || 0);
+    console.log('  Timestamp:', new Date(data.timestamp).toISOString());
+    
+    if (data.suggestions && data.suggestions.length > 0) {
+      console.log('\n  Suggestions:');
+      data.suggestions.forEach((suggestion, index) => {
+        console.log(`    ${index + 1}. [${suggestion.id}] ${suggestion.label || suggestion.text || 'NO LABEL'}`);
+        console.log(`       Type: ${suggestion.type || 'N/A'}, Icon: ${suggestion.icon || 'N/A'}`);
+      });
+    } else {
+      console.log('  ⚠️  No suggestions in response!');
+    }
+    console.log('==================================\n');
+    
+    if (overlayWindow) {
+      overlayWindow.webContents.send("ai:response", data);
+      console.log('[Main] Forwarded ai:response to renderer');
+    } else {
+      console.warn('[Main] Cannot forward ai:response - overlayWindow is null');
+    }
+  });
+
+  // Listen to AI error events and forward to renderer
+  aiOrchestrationService.on("ai:error", (error) => {
+    console.error("[Main] AI error:", error);
+    if (overlayWindow) {
+      overlayWindow.webContents.send("ai:error", {
+        message: error.message,
+        stack: error.stack,
+      });
     }
   });
 

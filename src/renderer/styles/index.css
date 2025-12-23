@@ -946,6 +946,92 @@ body,
   font-style: italic;
 }
 
+.insights-empty {
+  padding: var(--space-lg);
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+/* Talking Points Section */
+.talking-points-section {
+  margin-top: var(--space-lg);
+  padding-top: var(--space-lg);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.talking-points-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: var(--space-md);
+}
+
+.talking-points-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.talking-point-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.talking-point-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.talking-point-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--accent-yellow);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.talking-point-label {
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  line-height: 1.5;
+  flex: 1;
+}
+
+.talking-points-empty {
+  padding: var(--space-md);
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+/* Actions Panel */
+.actions-panel {
+  width: 100%;
+  height: 100%;
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  overflow: hidden;
+}
+
+.actions-panel .panel-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 /* Action items */
 .action-item {
   display: flex;
@@ -1005,16 +1091,6 @@ body,
 .action-icon.sparkle {
   color: #f9a8d4;
   background: rgba(249, 168, 212, 0.15);
-}
-
-.action-icon.lightbulb {
-  color: #fbbf24;
-  background: rgba(251, 191, 36, 0.15);
-}
-
-.action-icon.help-circle {
-  color: #60a5fa;
-  background: rgba(96, 165, 250, 0.15);
 }
 
 .action-label {

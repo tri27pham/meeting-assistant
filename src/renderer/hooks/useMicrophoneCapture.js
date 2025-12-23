@@ -52,22 +52,30 @@ export function useMicrophoneCapture({ enabled = false, paused = false, onError 
   const start = useCallback(async () => {
     if (isCapturing || !enabled) return;
 
+    const startTime = performance.now();
+    console.log("[useMicrophoneCapture] Starting...");
     try {
       // Request microphone access
+      const getUserMediaStartTime = performance.now();
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: audioConstraints,
       });
+      const getUserMediaEndTime = performance.now();
+      console.log(`[useMicrophoneCapture] getUserMedia took ${(getUserMediaEndTime - getUserMediaStartTime).toFixed(2)}ms`);
 
       streamRef.current = stream;
       setHasPermission(true);
       setError(null);
 
       // Create AudioContext
+      const audioContextStartTime = performance.now();
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       const audioContext = new AudioContext({
         sampleRate: 48000, // Match requested sample rate
       });
       audioContextRef.current = audioContext;
+      const audioContextEndTime = performance.now();
+      console.log(`[useMicrophoneCapture] AudioContext creation took ${(audioContextEndTime - audioContextStartTime).toFixed(2)}ms`);
 
       // Create source node from media stream
       const source = audioContext.createMediaStreamSource(stream);
@@ -127,7 +135,13 @@ export function useMicrophoneCapture({ enabled = false, paused = false, onError 
       // The stream is active and ready to capture, waiting for first chunk adds unnecessary delay
       if (!hasCalledReadyRef.current && onReady) {
         hasCalledReadyRef.current = true;
+        const readyTime = performance.now();
+        const totalTime = readyTime - startTime;
+        console.log(`[useMicrophoneCapture] Stream connected and ready (${totalTime.toFixed(2)}ms), calling onReady immediately`);
         onReady();
+      } else {
+        const totalTime = performance.now() - startTime;
+        console.log(`[useMicrophoneCapture] Total start() took ${totalTime.toFixed(2)}ms`);
       }
     } catch (err) {
       console.error("[useMicrophoneCapture] Error starting capture:", err);

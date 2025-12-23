@@ -60,6 +60,8 @@ class DeepgramService extends EventEmitter {
         diarize: audioConfig.deepgram.diarize,
         smart_format: audioConfig.deepgram.smartFormat,
         endpointing: audioConfig.deepgram.endpointing,
+        filler_words: audioConfig.deepgram.filler_words,
+        alternatives: audioConfig.deepgram.alternatives,
       });
       const createEndTime = performance.now();
       console.log(`[DeepgramService] Creating connection took ${(createEndTime - createStartTime).toFixed(2)}ms`);

@@ -180,18 +180,39 @@ class AIOrchestrationService extends EventEmitter {
     const { recentVerbatim, summarizedHistory, fullContext } = contextForLLM;
 
     if (actionType === 'suggestion') {
-      return `Based on the following conversation context, generate 3-5 contextual talking points or suggestions that would be helpful for the speaker to continue or enhance the conversation.
+      return `You are an AI assistant helping someone during a live conversation. The conversation transcript may contain minor transcription errors (e.g., "chat g b t" instead of "ChatGPT", "neural net" instead of "neural network", etc.).
 
-Recent conversation:
+Your task:
+1. Interpret the transcript in context - make educated guesses about what was likely said based on context
+2. Correct common transcription errors by understanding the intended meaning
+3. Generate 3-5 contextual talking points or suggestions that would be helpful for the speaker to continue or enhance the conversation
+
+Recent conversation transcript (may contain minor errors):
 ${recentVerbatim || 'No recent conversation'}
 
 ${summarizedHistory ? `Previous context:\n${summarizedHistory}\n\n` : ''}
 
-Generate suggestions as a numbered list. Each suggestion should be concise and actionable.`;
+Instructions:
+- Use context clues to interpret unclear or incorrectly transcribed words
+- If you see "g b t" or "g p t" in context of AI, interpret it as "GPT" or "ChatGPT"
+- If you see partial words or unclear phrases, use the surrounding context to infer meaning
+- Generate suggestions that reflect the CORRECTED/INTERPRETED understanding of the conversation
+- Make suggestions that are relevant to what was ACTUALLY being discussed (not the raw transcription errors)
+
+Generate a mix of:
+1. Talking points (general conversation suggestions - things to say or discuss)
+2. Follow-up actions (specific actions like "define X", "get more information about Y", "ask follow-up questions about Z")
+
+Format as a numbered list. Each suggestion should be concise and actionable. Examples:
+1. Ask a clarifying question about [topic]
+2. Define [term] that was mentioned
+3. Share a related insight about [concept]
+4. Get more information about [subject]
+5. Suggest follow-up questions`;
     }
 
     // Other action types can be added here
-    return `Based on the conversation context: ${fullContext}`;
+    return `Based on the conversation context (note: transcript may contain minor errors, interpret in context): ${fullContext}`;
   }
 
   async *_callLLM(prompt, options = {}) {
@@ -216,7 +237,7 @@ Generate suggestions as a numbered list. Each suggestion should be concise and a
             content: prompt,
           },
         ],
-        model: 'llama-3.1-8b-instant', // Fast model for real-time suggestions (alternative: llama-3.3-70b-versatile for better quality)
+        model: 'llama-3.1-8b-instant', // Fast model for real-time suggestions
         stream: stream,
         temperature: 0.7,
         max_tokens: 500,
