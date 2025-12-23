@@ -15,7 +15,8 @@
     "dotenv": "^17.2.3",
     "electron-audio-loopback": "^1.0.0",
     "electron-mac-permissions": "^2.2.2",
-    "electron-store": "^8.1.0"
+    "electron-store": "^8.1.0",
+    "groq-sdk": "^0.37.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",

@@ -1,4 +1,5 @@
 const EventEmitter = require('events');
+const Groq = require('groq-sdk');
 
 class AIOrchestrationService extends EventEmitter {
   constructor(contextService) {
@@ -10,6 +11,16 @@ class AIOrchestrationService extends EventEmitter {
     this.minDebounceMs = 200; // 200ms minimum for 2+ segments
     this.singleSegmentDebounceMs = 500; // 500ms for single segment
     this.minSegmentsForImmediate = 2; // Trigger immediately if 2+ segments
+
+    // Initialize Groq client
+    const groqApiKey = process.env.GROQ_API_KEY;
+    if (!groqApiKey) {
+      console.warn('[AIOrchestrationService] GROQ_API_KEY not found in environment variables');
+    }
+    this.groq = new Groq({
+      apiKey: groqApiKey,
+    });
+    console.log('[AIOrchestrationService] Groq client initialized', { hasApiKey: !!groqApiKey });
 
     // Listen to both regular snapshots and topic changes
     contextService.on('context:snapshot', (snapshot) => {
@@ -184,54 +195,63 @@ Generate suggestions as a numbered list. Each suggestion should be concise and a
   }
 
   async *_callLLM(prompt, options = {}) {
-    const { signal, stream = false, actionType = 'suggestion' } = options;
+    const { signal, stream = true, actionType = 'suggestion' } = options;
 
-    // Initial implementation: Mock LLM response
-    // TODO: Replace with actual LLM provider integration
     if (signal.aborted) {
       return;
     }
 
-    // Simulate streaming response
-    const mockSuggestions = this._generateMockSuggestions(prompt);
-    const mockResponse = mockSuggestions.join('\n');
-
-    if (stream) {
-      // Simulate streaming by chunking the response
-      // Preserve newlines by splitting on spaces but keeping newlines in chunks
-      const chunks = mockResponse.match(/.{1,10}/g) || [mockResponse]; // Chunk by ~10 chars to preserve structure
-      for (let i = 0; i < chunks.length; i++) {
-        if (signal.aborted) {
-          break;
-        }
-        // Simulate network delay
-        await new Promise((resolve) => setTimeout(resolve, 20));
-        yield chunks[i];
-      }
-    } else {
-      yield mockResponse;
+    if (!process.env.GROQ_API_KEY) {
+      console.error('[AIOrchestrationService] GROQ_API_KEY not configured');
+      throw new Error('Groq API key not configured. Please set GROQ_API_KEY in your .env file.');
     }
-  }
 
-  _generateMockSuggestions(prompt) {
-    // Extract keywords from prompt to make suggestions more contextual
-    const keywords = prompt
-      .toLowerCase()
-      .match(/\b\w{4,}\b/g)
-      ?.slice(0, 5) || [];
+    try {
+      console.log('[AIOrchestrationService] Calling Groq API', { promptLength: prompt.length, stream });
 
-    const baseSuggestions = [
-      'Ask a clarifying question about the topic',
-      'Provide a relevant example or analogy',
-      'Share a related insight or perspective',
-      'Propose next steps or action items',
-      'Connect to a related concept or idea',
-    ];
+      const completion = await this.groq.chat.completions.create({
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        model: 'llama-3.1-8b-instant', // Fast model for real-time suggestions (alternative: llama-3.3-70b-versatile for better quality)
+        stream: stream,
+        temperature: 0.7,
+        max_tokens: 500,
+      });
 
-    // Return 3-5 suggestions
-    return baseSuggestions.slice(0, 3 + Math.floor(Math.random() * 3)).map((suggestion, index) => {
-      return `${index + 1}. ${suggestion}`;
-    });
+      if (stream) {
+        // Handle streaming response
+        for await (const chunk of completion) {
+          if (signal.aborted) {
+            console.log('[AIOrchestrationService] Stream aborted');
+            break;
+          }
+
+          const content = chunk.choices?.[0]?.delta?.content;
+          if (content) {
+            yield content;
+          }
+        }
+      } else {
+        // Handle non-streaming response
+        const content = completion.choices?.[0]?.message?.content;
+        if (content) {
+          yield content;
+        }
+      }
+    } catch (error) {
+      console.error('[AIOrchestrationService] Groq API error:', error);
+      if (error.status === 401) {
+        throw new Error('Invalid Groq API key. Please check your GROQ_API_KEY in .env file.');
+      } else if (error.status === 429) {
+        throw new Error('Groq API rate limit exceeded. Please try again later.');
+      } else {
+        throw new Error(`Groq API error: ${error.message}`);
+      }
+    }
   }
 
   _extractPartialSuggestions(partialText) {
@@ -259,9 +279,26 @@ Generate suggestions as a numbered list. Each suggestion should be concise and a
   processResponse(response, actionType) {
     // Format LLM response as action items for UI
     console.log('[AIOrchestrationService] processResponse called', { responseLength: response.length, responsePreview: response.substring(0, 200) });
-    const lines = response.split('\n').filter((l) => l.trim());
-    console.log('[AIOrchestrationService] Split into lines', { lineCount: lines.length, lines });
+    
     const suggestions = [];
+    
+    // First try splitting by newlines
+    let lines = response.split('\n').filter((l) => l.trim());
+    
+    // If we only have one line, try splitting by numbered patterns (e.g., "1. ...2. ...3. ...")
+    if (lines.length === 1) {
+      console.log('[AIOrchestrationService] Single line detected, attempting to split by numbered patterns');
+      // Match pattern: number followed by period/space, then text, followed by another number
+      // This regex finds: "1. text2. text3. text" and splits it
+      const numberedPattern = /(\d+[\.\)]\s*[^\d]+?)(?=\d+[\.\)]|$)/g;
+      const matches = lines[0].match(numberedPattern);
+      if (matches && matches.length > 1) {
+        console.log('[AIOrchestrationService] Split by numbered patterns', { matchCount: matches.length });
+        lines = matches;
+      }
+    }
+    
+    console.log('[AIOrchestrationService] Processing lines', { lineCount: lines.length, lines });
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
