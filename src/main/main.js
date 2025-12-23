@@ -7,6 +7,7 @@ const {
 } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const { performance } = require("perf_hooks");
 
 try {
   const dotenv = require("dotenv");
@@ -113,9 +114,16 @@ function registerHotkeys() {
 }
 
 function setupAudioPipeline() {
+  let firstChunkSent = false;
   audioCaptureService.on("audioChunk", (chunk) => {
     if (deepgramService.isConnected) {
+      if (!firstChunkSent) {
+        console.log("[Main] First audio chunk being sent to Deepgram");
+        firstChunkSent = true;
+      }
       deepgramService.streamAudio(chunk);
+    } else {
+      console.warn("[Main] Audio chunk received but Deepgram is not connected");
     }
   });
 
@@ -130,15 +138,24 @@ function setupAudioPipeline() {
     }
   });
 
+  let isReconnecting = false;
   deepgramService.on("closed", () => {
-    if (audioCaptureService.isCapturing) {
+    if (audioCaptureService.isCapturing && !isReconnecting) {
+      isReconnecting = true;
+      console.log("[Main] Deepgram connection closed, reconnecting in 2s...");
       setTimeout(async () => {
         try {
           await deepgramService.connect();
+          isReconnecting = false;
         } catch (error) {
           console.error("[Main] Failed to reconnect to Deepgram:", error);
+          isReconnecting = false;
         }
       }, 2000);
+    } else if (!audioCaptureService.isCapturing) {
+      console.log("[Main] Deepgram connection closed, but audio capture is not active - not reconnecting");
+    } else {
+      console.log("[Main] Deepgram connection closed, but reconnection already in progress");
     }
   });
 
@@ -205,7 +222,21 @@ function setupAudioPipeline() {
 
 function setupIPC() {
   ipcMain.handle("session:start", async () => {
+    let startTime;
     try {
+      startTime = performance.now();
+      console.log("[Main] session:start called");
+    } catch (e) {
+      console.error("[Main] Error accessing performance:", e);
+      startTime = Date.now();
+    }
+    try {
+      let permStartTime, permEndTime;
+      try {
+        permStartTime = performance.now();
+      } catch (e) {
+        permStartTime = Date.now();
+      }
       const hasPermissions = await permissionService.hasAllPermissions();
       if (!hasPermissions) {
         const permissions = await permissionService.requestAllPermissions();
@@ -217,6 +248,13 @@ function setupIPC() {
           };
         }
       }
+      try {
+        permEndTime = performance.now();
+        console.log(`[Main] Permission check took ${(permEndTime - permStartTime).toFixed(2)}ms`);
+      } catch (e) {
+        permEndTime = Date.now();
+        console.log(`[Main] Permission check took ${(permEndTime - permStartTime)}ms`);
+      }
 
       if (!deepgramService.isReady()) {
         return {
@@ -225,13 +263,47 @@ function setupIPC() {
         };
       }
 
+      let deepgramStartTime, deepgramEndTime;
+      try {
+        deepgramStartTime = performance.now();
+      } catch (e) {
+        deepgramStartTime = Date.now();
+      }
       await deepgramService.connect();
+      try {
+        deepgramEndTime = performance.now();
+        console.log(`[Main] Deepgram connection took ${(deepgramEndTime - deepgramStartTime).toFixed(2)}ms`);
+      } catch (e) {
+        deepgramEndTime = Date.now();
+        console.log(`[Main] Deepgram connection took ${(deepgramEndTime - deepgramStartTime)}ms`);
+      }
 
+      let audioStartTime, audioEndTime;
+      try {
+        audioStartTime = performance.now();
+      } catch (e) {
+        audioStartTime = Date.now();
+      }
       await audioCaptureService.start({
         systemAudio: true,
         microphone: true,
       });
+      try {
+        audioEndTime = performance.now();
+        console.log(`[Main] Audio capture start took ${(audioEndTime - audioStartTime).toFixed(2)}ms`);
+      } catch (e) {
+        audioEndTime = Date.now();
+        console.log(`[Main] Audio capture start took ${(audioEndTime - audioStartTime)}ms`);
+      }
 
+      let totalTime;
+      try {
+        totalTime = performance.now() - startTime;
+        console.log(`[Main] Total session:start took ${totalTime.toFixed(2)}ms`);
+      } catch (e) {
+        totalTime = Date.now() - startTime;
+        console.log(`[Main] Total session:start took ${totalTime}ms`);
+      }
       return { success: true };
     } catch (error) {
       console.error("[Main] Error starting session:", error);

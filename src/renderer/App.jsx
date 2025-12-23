@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import ControlBar from "./components/ControlBar";
 import LiveInsightsPanel from "./components/LiveInsightsPanel";
 import AIResponsePanel from "./components/AIResponsePanel";
@@ -29,6 +29,7 @@ function App() {
   const [isPaused, setIsPaused] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [sessionTime, setSessionTime] = useState(0);
+  const sessionStartTimeRef = useRef(null);
 
   const [layoutKey, setLayoutKey] = useState(0);
 
@@ -147,6 +148,13 @@ function App() {
     },
     onReady: () => {
       // Mic is capturing audio, everything is ready
+      try {
+        const readyTime = performance.now();
+        const startTime = sessionStartTimeRef.current || readyTime;
+        console.log(`[App] Microphone ready, total initialization: ${(readyTime - startTime).toFixed(2)}ms`);
+      } catch (e) {
+        console.log("[App] Microphone ready");
+      }
       setIsStarting(false);
       setShowTranscript(true);
     },
@@ -237,20 +245,33 @@ function App() {
   }, []);
 
   const handleTogglePause = useCallback(async () => {
-    if (!window.cluely) return;
+    console.log("[App] handleTogglePause called", { isRunning, isPaused, isStarting, hasCluely: !!window.cluely });
+    if (!window.cluely) {
+      console.error("[App] window.cluely is not available");
+      return;
+    }
     
     if (!isRunning) {
-      setIsStarting(true);
       try {
+        const startTime = performance.now();
+        sessionStartTimeRef.current = startTime;
+        console.log("[App] Starting session...");
+        setIsStarting(true);
+        
+        const sessionStartTime = performance.now();
         const result = await window.cluely.session.start();
-        if (result.success) {
+        const sessionEndTime = performance.now();
+        console.log(`[App] session.start() took ${(sessionEndTime - sessionStartTime).toFixed(2)}ms`, result);
+        
+        if (result && result.success) {
           setIsRunning(true);
           setIsPaused(false);
           setSessionTime(0);
           setTranscript([]);
+          console.log("[App] Session started, waiting for microphone...");
           // Don't show transcript or hide spinner yet - wait for onReady callback from mic
         } else {
-          console.error("[App] Failed to start session:", result.error);
+          console.error("[App] Failed to start session:", result?.error || "Unknown error");
           setIsStarting(false);
         }
       } catch (error) {

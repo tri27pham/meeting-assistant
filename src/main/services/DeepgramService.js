@@ -1,5 +1,6 @@
 const { createClient, LiveTranscriptionEvents } = require('@deepgram/sdk');
 const EventEmitter = require('events');
+const { performance } = require('perf_hooks');
 const audioConfig = require('../config/audioConfig');
 
 class DeepgramService extends EventEmitter {
@@ -9,6 +10,7 @@ class DeepgramService extends EventEmitter {
     this.liveConnection = null;
     this.isConnected = false;
     this.isStreaming = false;
+    this.keepaliveInterval = null;
 
     const apiKey = audioConfig.deepgram.apiKey;
     if (!apiKey) {
@@ -19,6 +21,7 @@ class DeepgramService extends EventEmitter {
   }
 
   async connect() {
+    const connectStartTime = performance.now();
     if (!this.deepgram) {
       const error = new Error('Deepgram API key not configured');
       this.emit('error', error);
@@ -26,11 +29,26 @@ class DeepgramService extends EventEmitter {
     }
 
     if (this.isConnected) {
-      console.warn('[DeepgramService] Already connected');
+      console.warn('[DeepgramService] Already connected, skipping reconnect');
       return true;
     }
 
+    // Clean up any existing connection before creating a new one
+    if (this.liveConnection) {
+      console.log('[DeepgramService] Cleaning up existing connection before reconnecting');
+      try {
+        this.liveConnection.removeAllListeners();
+        if (this.isStreaming) {
+          this.liveConnection.requestClose();
+        }
+      } catch (e) {
+        console.warn('[DeepgramService] Error cleaning up old connection:', e.message);
+      }
+      this.liveConnection = null;
+    }
+
     try {
+      const createStartTime = performance.now();
       this.liveConnection = this.deepgram.listen.live({
         model: audioConfig.deepgram.model,
         language: audioConfig.deepgram.language,
@@ -43,9 +61,12 @@ class DeepgramService extends EventEmitter {
         smart_format: audioConfig.deepgram.smartFormat,
         endpointing: audioConfig.deepgram.endpointing,
       });
+      const createEndTime = performance.now();
+      console.log(`[DeepgramService] Creating connection took ${(createEndTime - createStartTime).toFixed(2)}ms`);
 
       this._setupEventListeners();
 
+      const waitStartTime = performance.now();
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
           reject(new Error('Connection timeout'));
@@ -53,10 +74,13 @@ class DeepgramService extends EventEmitter {
 
         this.liveConnection.once(LiveTranscriptionEvents.Open, () => {
           clearTimeout(timeout);
+          const waitEndTime = performance.now();
+          console.log(`[DeepgramService] Waiting for Open event took ${(waitEndTime - waitStartTime).toFixed(2)}ms`);
           this.isConnected = true;
           this.isStreaming = false;
           this.emit('connected');
-          console.log('[DeepgramService] Connected to Deepgram');
+          console.log('[DeepgramService] Connected to Deepgram - connection is ready');
+          this._startKeepalive();
           resolve();
         });
 
@@ -66,6 +90,8 @@ class DeepgramService extends EventEmitter {
         });
       });
 
+      const totalTime = performance.now() - connectStartTime;
+      console.log(`[DeepgramService] Total connect() took ${totalTime.toFixed(2)}ms`);
       return true;
     } catch (error) {
       console.error('[DeepgramService] Connection error:', error);
@@ -81,6 +107,8 @@ class DeepgramService extends EventEmitter {
     }
 
     try {
+      this._stopKeepalive();
+      
       if (this.isStreaming) {
         this.liveConnection.requestClose();
         this.isStreaming = false;
@@ -94,6 +122,36 @@ class DeepgramService extends EventEmitter {
     } catch (error) {
       console.error('[DeepgramService] Error disconnecting:', error);
       this.emit('error', error);
+    }
+  }
+
+  _startKeepalive() {
+    this._stopKeepalive();
+    
+    // Send silence packets every 100ms to keep connection alive until real audio arrives
+    // Deepgram expects audio at ~16kHz, so 1600 samples = 100ms of silence
+    const silenceChunk = new Int16Array(1600).fill(0); // 100ms of silence at 16kHz
+    
+    this.keepaliveInterval = setInterval(() => {
+      if (this.isConnected && this.liveConnection && !this.isStreaming) {
+        try {
+          const audioBuffer = Buffer.from(silenceChunk.buffer);
+          this.liveConnection.send(audioBuffer);
+        } catch (error) {
+          console.warn('[DeepgramService] Error sending keepalive:', error.message);
+          this._stopKeepalive();
+        }
+      } else if (this.isStreaming) {
+        // Real audio is flowing, stop keepalive
+        this._stopKeepalive();
+      }
+    }, 100);
+  }
+
+  _stopKeepalive() {
+    if (this.keepaliveInterval) {
+      clearInterval(this.keepaliveInterval);
+      this.keepaliveInterval = null;
     }
   }
 
@@ -114,6 +172,10 @@ class DeepgramService extends EventEmitter {
         return;
       }
 
+      if (!this.isStreaming) {
+        console.log('[DeepgramService] Starting to stream audio to Deepgram');
+        this._stopKeepalive(); // Stop keepalive once real audio starts
+      }
       this.liveConnection.send(audioBuffer);
       this.isStreaming = true;
     } catch (error) {
@@ -124,6 +186,9 @@ class DeepgramService extends EventEmitter {
 
   _setupEventListeners() {
     if (!this.liveConnection) return;
+
+    // Remove existing listeners to prevent duplicates
+    this.liveConnection.removeAllListeners();
 
     this.liveConnection.on(LiveTranscriptionEvents.Transcript, (data) => {
       try {
@@ -141,6 +206,8 @@ class DeepgramService extends EventEmitter {
     });
 
     this.liveConnection.on(LiveTranscriptionEvents.Close, () => {
+      console.log('[DeepgramService] Connection closed by Deepgram');
+      this._stopKeepalive();
       this.isConnected = false;
       this.isStreaming = false;
       this.emit('closed');
