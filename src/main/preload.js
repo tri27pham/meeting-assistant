@@ -95,5 +95,17 @@ contextBridge.exposeInMainWorld("cluely", {
       ipcRenderer.on("audio:levels-update", (event, levels) => callback(levels));
       return () => ipcRenderer.removeAllListeners("audio:levels-update");
     },
+
+    // AI response events (partial and complete)
+    aiResponse: (callback) => {
+      ipcRenderer.on("ai:response", (event, data) => callback(data));
+      return () => ipcRenderer.removeAllListeners("ai:response");
+    },
+
+    // AI error events
+    aiError: (callback) => {
+      ipcRenderer.on("ai:error", (event, error) => callback(error));
+      return () => ipcRenderer.removeAllListeners("ai:error");
+    },
   },
 });

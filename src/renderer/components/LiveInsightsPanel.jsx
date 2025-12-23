@@ -5,6 +5,8 @@ import {
   BookIcon,
   GlobeIcon,
   ChatIcon,
+  LightbulbIcon,
+  HelpCircleIcon,
 } from "./Icons";
 
 function LiveInsightsPanel({
@@ -14,6 +16,22 @@ function LiveInsightsPanel({
   onActionSelect,
   onCopyInsights,
 }) {
+  // Debug: Log actions to verify they're being passed
+  React.useEffect(() => {
+    console.log('[LiveInsightsPanel] Actions received:', { 
+      count: actions?.length, 
+      actions,
+      actionIds: actions?.map(a => a.id),
+      actionLabels: actions?.map(a => a.label),
+      actionDetails: actions?.map(a => ({ id: a.id, label: a.label, icon: a.icon, hasLabel: !!a.label, labelLength: a.label?.length }))
+    });
+  }, [actions]);
+
+  // Force re-render when actions change
+  const actionsKey = React.useMemo(() => {
+    return actions?.map(a => a.id).join(',') || 'empty';
+  }, [actions]);
+
   const getActionIcon = (iconType) => {
     switch (iconType) {
       case "book":
@@ -24,6 +42,10 @@ function LiveInsightsPanel({
         return <ChatIcon />;
       case "sparkle":
         return <SparkleIcon />;
+      case "lightbulb":
+        return <LightbulbIcon />;
+      case "help-circle":
+        return <HelpCircleIcon />;
       default:
         return <SparkleIcon />;
     }
@@ -65,19 +87,29 @@ function LiveInsightsPanel({
           <div className="actions-section">
             <h4 className="actions-title">Actions</h4>
             <div className="actions-list">
-              {actions.map((action) => (
-                <button
-                  key={action.id}
-                  className={`action-item ${selectedAction === action.id ? "selected" : ""}`}
-                  onClick={() => onActionSelect(action.id)}
-                  aria-pressed={selectedAction === action.id}
-                >
-                  <span className={`action-icon ${action.icon}`}>
-                    {getActionIcon(action.icon)}
-                  </span>
-                  <span className="action-label">{action.label}</span>
-                </button>
-              ))}
+              {actions && actions.length > 0 ? (
+                actions.map((action, index) => {
+                  // Use both id and index for key to ensure React detects changes
+                  const actionKey = action.id || `action-${index}`;
+                  return (
+                    <button
+                      key={actionKey}
+                      className={`action-item ${selectedAction === action.id ? "selected" : ""}`}
+                      onClick={() => onActionSelect(action.id)}
+                      aria-pressed={selectedAction === action.id}
+                    >
+                      <span className={`action-icon ${action.icon || 'lightbulb'}`}>
+                        {getActionIcon(action.icon || 'lightbulb')}
+                      </span>
+                      <span className="action-label" style={{ minWidth: 0, overflow: 'visible' }}>
+                        {action.label || action.text || 'Untitled suggestion'}
+                      </span>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="actions-empty">No suggestions yet. Keep talking to generate AI suggestions.</div>
+              )}
             </div>
           </div>
     </div>

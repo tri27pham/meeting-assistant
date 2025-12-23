@@ -90,34 +90,21 @@ function App() {
     context: "Neel asked you about who recently acquired Windsurf",
   });
 
-  const [actions, setActions] = useState([
-    {
-      id: 1,
-      type: "define",
-      label: "Define startup acquisition",
-      icon: "book",
-    },
-    {
-      id: 2,
-      type: "search",
-      label: "Search the web for information about Windsurf acquisition",
-      icon: "globe",
-    },
-    {
-      id: 3,
-      type: "followup",
-      label: "Suggest follow-up questions",
-      icon: "chat",
-    },
-    {
-      id: 4,
-      type: "help",
-      label: "Give me helpful information",
-      icon: "sparkle",
-    },
-  ]);
+  // Start with empty actions - they'll be populated by AI suggestions
+  const [actions, setActions] = useState([]);
 
-  const [selectedAction, setSelectedAction] = useState(2);
+  // Debug: Log when actions state changes
+  useEffect(() => {
+    console.log('[App] Actions state updated', { 
+      count: actions.length, 
+      actions,
+      actionIds: actions.map(a => a.id),
+      actionLabels: actions.map(a => a.label),
+      timestamp: Date.now()
+    });
+  }, [actions]);
+
+  const [selectedAction, setSelectedAction] = useState(null);
 
   const [aiResponse, setAiResponse] = useState({
     action: "Search the web for information...",
@@ -148,13 +135,6 @@ function App() {
     },
     onReady: () => {
       // Mic is capturing audio, everything is ready
-      try {
-        const readyTime = performance.now();
-        const startTime = sessionStartTimeRef.current || readyTime;
-        console.log(`[App] Microphone ready, total initialization: ${(readyTime - startTime).toFixed(2)}ms`);
-      } catch (e) {
-        console.log("[App] Microphone ready");
-      }
       setIsStarting(false);
       setShowTranscript(true);
     },
@@ -173,7 +153,12 @@ function App() {
   // Start session on mount
 
   useEffect(() => {
-    if (!window.cluely) return;
+    if (!window.cluely) {
+      console.warn('[App] window.cluely not available in useEffect');
+      return;
+    }
+
+    console.log('[App] Setting up event listeners', { hasOn: !!window.cluely.on, hasAiResponse: !!window.cluely.on?.aiResponse });
 
     const unsubTranscript = window.cluely.on.transcriptUpdate((segment) => {
       setTranscript((prev) => {
@@ -233,6 +218,62 @@ function App() {
       setShowTranscript((prev) => !prev);
     });
 
+    // Listen to AI response events (partial and complete)
+    let unsubAIResponse = null;
+    if (window.cluely && window.cluely.on && window.cluely.on.aiResponse) {
+      console.log('[App] Setting up aiResponse listener');
+      unsubAIResponse = window.cluely.on.aiResponse((data) => {
+        console.log('[App] Received ai:response event', { actionType: data.actionType, isPartial: data.isPartial, suggestionCount: data.suggestions?.length });
+        
+        // Accept 'suggestion' or 'suggest' action types (both are talking point suggestions)
+        if ((data.actionType === 'suggestion' || data.actionType === 'suggest') && data.suggestions) {
+          if (data.isPartial) {
+            console.log('[App] Processing partial suggestions', { count: data.suggestions.length });
+            // Show partial suggestions immediately for faster UI updates
+            setActions((prev) => {
+              // Merge partial suggestions with existing ones
+              const partialIds = new Set(data.suggestions.map((s) => s.id));
+              const existing = prev.filter((a) => !partialIds.has(a.id));
+              return [...existing, ...data.suggestions];
+            });
+          } else {
+            console.log('[App] Processing complete suggestions', { count: data.suggestions.length, rawSuggestions: data.suggestions });
+            // Replace with complete suggestions - ensure we create a new array reference
+            const newActions = data.suggestions.map((suggestion, index) => {
+              const action = {
+                id: suggestion.id || `action-${Date.now()}-${index}`,
+                type: suggestion.type || 'suggest',
+                label: suggestion.label || suggestion.text || 'Untitled suggestion',
+                icon: suggestion.icon || 'lightbulb',
+              };
+              console.log('[App] Mapped suggestion to action', { suggestion, action });
+              return action;
+            });
+            console.log('[App] Setting actions state', { actionCount: newActions.length, actions: newActions });
+            // Force state update by creating a new array reference
+            setActions(() => [...newActions]);
+          }
+        } else {
+          console.warn('[App] Received ai:response but actionType is not suggestion or no suggestions', data);
+        }
+      });
+    } else {
+      console.error('[App] Cannot set up aiResponse listener', {
+        hasCluely: !!window.cluely,
+        hasOn: !!(window.cluely && window.cluely.on),
+        hasAiResponse: !!(window.cluely && window.cluely.on && window.cluely.on.aiResponse),
+      });
+    }
+
+    // Listen to AI error events
+    let unsubAIError = null;
+    if (window.cluely && window.cluely.on && window.cluely.on.aiError) {
+      unsubAIError = window.cluely.on.aiError((error) => {
+        console.error('[App] AI error:', error);
+        // Could show error message to user here
+      });
+    }
+
     return () => {
       unsubTranscript();
       if (unsubAudioLevels) unsubAudioLevels();
@@ -241,11 +282,12 @@ function App() {
       unsubTrigger?.();
       unsubResetLayout?.();
       unsubToggleTranscript?.();
+      unsubAIResponse?.();
+      unsubAIError?.();
     };
   }, []);
 
   const handleTogglePause = useCallback(async () => {
-    console.log("[App] handleTogglePause called", { isRunning, isPaused, isStarting, hasCluely: !!window.cluely });
     if (!window.cluely) {
       console.error("[App] window.cluely is not available");
       return;
@@ -255,20 +297,15 @@ function App() {
       try {
         const startTime = performance.now();
         sessionStartTimeRef.current = startTime;
-        console.log("[App] Starting session...");
         setIsStarting(true);
         
-        const sessionStartTime = performance.now();
         const result = await window.cluely.session.start();
-        const sessionEndTime = performance.now();
-        console.log(`[App] session.start() took ${(sessionEndTime - sessionStartTime).toFixed(2)}ms`, result);
         
         if (result && result.success) {
           setIsRunning(true);
           setIsPaused(false);
           setSessionTime(0);
           setTranscript([]);
-          console.log("[App] Session started, waiting for microphone...");
           // Don't show transcript or hide spinner yet - wait for onReady callback from mic
         } else {
           console.error("[App] Failed to start session:", result?.error || "Unknown error");

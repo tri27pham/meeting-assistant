@@ -938,6 +938,14 @@ body,
   gap: 2px;
 }
 
+.actions-empty {
+  padding: var(--space-md);
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
 /* Action items */
 .action-item {
   display: flex;
@@ -997,6 +1005,16 @@ body,
 .action-icon.sparkle {
   color: #f9a8d4;
   background: rgba(249, 168, 212, 0.15);
+}
+
+.action-icon.lightbulb {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.15);
+}
+
+.action-icon.help-circle {
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.15);
 }
 
 .action-label {

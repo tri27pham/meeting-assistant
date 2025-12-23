@@ -410,3 +410,55 @@ export function SettingsIcon({ className = "" }) {
     </svg>
   );
 }
+
+export function LightbulbIcon({ className = "" }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M6 12H10M8 12V14M6 6C6 4.89543 6.89543 4 8 4C9.10457 4 10 4.89543 10 6C10 7.10457 9.10457 8 8 8V10C8 10.5523 7.55228 11 7 11H5C4.44772 11 4 10.5523 4 10V8C4.89543 8 6 7.10457 6 6Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8 2V4"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export function HelpCircleIcon({ className = "" }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M8 11.5C8.27614 11.5 8.5 11.2761 8.5 11C8.5 10.7239 8.27614 10.5 8 10.5C7.72386 10.5 7.5 10.7239 7.5 11C7.5 11.2761 7.72386 11.5 8 11.5Z"
+        fill="currentColor"
+      />
+      <path
+        d="M8 4.5C7.17157 4.5 6.5 5.17157 6.5 6C6.5 6.27614 6.72386 6.5 7 6.5C7.27614 6.5 7.5 6.27614 7.5 6C7.5 5.72386 7.72386 5.5 8 5.5C8.27614 5.5 8.5 5.72386 8.5 6V7C8.5 7.27614 8.27614 7.5 8 7.5C7.72386 7.5 7.5 7.27614 7.5 7V6.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
