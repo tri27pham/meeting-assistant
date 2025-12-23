@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import ControlBar from "./components/ControlBar";
 import LiveInsightsPanel from "./components/LiveInsightsPanel";
 import ActionsPanel from "./components/ActionsPanel";
-import AIResponsePanel from "./components/AIResponsePanel";
 import TranscriptPanel from "./components/TranscriptPanel";
 import SettingsPanel from "./components/SettingsPanel";
 import AudioMeterPanel from "./components/AudioMeterPanel";
@@ -13,7 +12,6 @@ const PANEL_IDS = [
   "control-bar",
   "live-insights",
   "actions",
-  "ai-response",
   "transcript",
   "settings",
   "audio-meter",
@@ -22,7 +20,6 @@ const PANEL_IDS = [
 const PANEL_SIZES = {
   liveInsights: { width: 420, height: 400 },
   actions: { width: 420, height: 350 }, // Same width as liveInsights
-  aiResponse: { width: 450, height: 380 },
   transcript: { width: 380, height: 350 },
   audioMeter: { width: 320, height: 200 },
 };
@@ -38,7 +35,6 @@ function App() {
 
   const [showTranscript, setShowTranscript] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showAiResponse, setShowAiResponse] = useState(true);
   
   // Load audio meter visibility preference from localStorage
   const [showAudioMeter, setShowAudioMeter] = useState(() => {
@@ -71,14 +67,6 @@ function App() {
           containerPadding,
         y: topOffset,
       },
-      aiResponse: {
-        x:
-          screenWidth -
-          PANEL_SIZES.aiResponse.width -
-          margin -
-          containerPadding,
-        y: topOffset,
-      },
       transcript: {
         x: margin - containerPadding,
         y: topOffset + PANEL_SIZES.liveInsights.height + 16,
@@ -89,7 +77,7 @@ function App() {
       },
       settings: {
         x: screenWidth - 400 - margin - containerPadding,
-        y: topOffset + PANEL_SIZES.aiResponse.height + 16,
+        y: topOffset + PANEL_SIZES.actions.height + 16,
       },
     };
   }, [layoutKey]);
@@ -108,12 +96,6 @@ function App() {
   const [actions, setActions] = useState([]);
 
   const [selectedAction, setSelectedAction] = useState(null);
-
-  const [aiResponse, setAiResponse] = useState({
-    action: "Search the web for information...",
-    content: `On July 14, 2025, Cognition acquired the remainder of Windsurf to integrate into its Devin platform\n\nIncludes Windsurf's agentic IDE, IP, brand, $82 M ARR, 350+ enterprise clients, and full team`,
-    origin: "cloud",
-  });
 
   const [transcript, setTranscript] = useState([]);
   const [audioLevels, setAudioLevels] = useState({
@@ -198,17 +180,8 @@ function App() {
     });
 
     const unsubTrigger = window.cluely.on.triggerAISuggestion(() => {
-      setShowAiResponse((prev) => {
-        const newValue = !prev;
-        if (newValue && window.cluely) {
-          window.cluely.ai.triggerAction("manual", {
-            timestamp: Date.now(),
-          }).catch((err) => {
-            console.error("[App] Error triggering AI action:", err);
-          });
-        }
-        return newValue;
-      });
+      // AI suggestions are now handled automatically via context service
+      // No manual trigger needed
     });
 
     const unsubResetLayout = window.cluely.on?.resetLayout?.(() => {
@@ -365,25 +338,6 @@ function App() {
     }
   }, [isRunning, isPaused]);
 
-  const handleAskAI = useCallback(async () => {
-    if (showAiResponse) {
-      setShowAiResponse(false);
-      if (window.cluely?.window?.mouseLeavePanel) {
-        window.cluely.window.mouseLeavePanel();
-      }
-    } else {
-      setShowAiResponse(true);
-      if (window.cluely) {
-        try {
-          await window.cluely.ai.triggerAction("manual", {
-            timestamp: Date.now(),
-          });
-        } catch (err) {
-          console.error("[App] Error triggering AI action:", err);
-      }
-      }
-    }
-  }, [showAiResponse]);
 
   const handleToggleVisibility = useCallback(() => {
     if (window.cluely) {
@@ -403,20 +357,6 @@ function App() {
     },
     [actions],
   );
-
-  const handleCopyResponse = useCallback(() => {
-    if (aiResponse?.content) {
-      navigator.clipboard.writeText(aiResponse.content);
-    }
-  }, [aiResponse?.content]);
-
-  const handleCloseResponse = useCallback(() => {
-    setAiResponse(null);
-    setShowAiResponse(false);
-    if (window.cluely?.window?.mouseLeavePanel) {
-      window.cluely.window.mouseLeavePanel();
-    }
-  }, []);
 
   const handleCopyInsights = useCallback(() => {}, []);
 
@@ -468,7 +408,6 @@ function App() {
           isStarting={isStarting}
           sessionTime={formatTime(sessionTime)}
           onTogglePause={handleTogglePause}
-          onAskAI={handleAskAI}
           onToggleVisibility={handleToggleVisibility}
           onResetLayout={handleResetLayout}
           onOpenSettings={handleToggleSettings}
@@ -506,24 +445,6 @@ function App() {
           onActionSelect={handleActionSelect}
         />
       </DraggablePanel>
-
-      {showAiResponse && (
-        <DraggablePanel 
-          key={`ai-response-${layoutKey}`}
-          panelId="ai-response"
-          initialPosition={defaultPositions.aiResponse}
-          initialSize={PANEL_SIZES.aiResponse}
-          minSize={{ width: 340, height: 280 }}
-          maxSize={{ width: 650, height: 700 }}
-          resizable={true}
-        >
-          <AIResponsePanel
-            response={aiResponse}
-            onCopy={handleCopyResponse}
-            onClose={handleCloseResponse}
-          />
-        </DraggablePanel>
-      )}
       
       {showTranscript && (
         <DraggablePanel

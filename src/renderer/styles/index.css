@@ -1155,120 +1155,6 @@ body,
   text-align: center;
 }
 
-/* ============================================
-   AI Response Panel
-   ============================================ */
-
-.ai-response-panel {
-  width: 100%;
-  height: 100%;
-  padding: var(--space-lg);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-lg);
-  background: var(--glass-bg-elevated);
-  overflow: hidden;
-}
-
-.ai-response-panel .panel-header {
-  gap: var(--space-sm);
-}
-
-.response-header-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  gap: var(--space-md);
-}
-
-.response-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-/* Action badge with pill shape */
-.response-action-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  background: rgba(147, 197, 253, 0.12);
-  border: 1px solid rgba(147, 197, 253, 0.2);
-  border-radius: var(--radius-full);
-  font-size: 12px;
-  font-weight: 500;
-  color: #93c5fd;
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.response-action-badge svg {
-  flex-shrink: 0;
-  opacity: 0.9;
-}
-
-/* Close button variant */
-.close-btn {
-  color: var(--text-secondary);
-}
-
-.close-btn:hover {
-  background: rgba(239, 68, 68, 0.15);
-  border-color: rgba(239, 68, 68, 0.25);
-  color: #fca5a5;
-}
-
-/* Response content */
-.response-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-  overflow-y: auto;
-  padding-right: var(--space-sm);
-}
-
-.response-content p {
-  font-size: 14px;
-  line-height: 1.65;
-  color: var(--text-primary);
-}
-
-.response-content p:first-child {
-  font-weight: 500;
-}
-
-/* Origin badge */
-.response-footer {
-  display: flex;
-  justify-content: flex-end;
-  padding-top: var(--space-sm);
-  border-top: 1px solid var(--glass-border);
-}
-
-.origin-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: 500;
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-tertiary);
-}
-
-.origin-badge.cloud {
-  color: #93c5fd;
-}
-
-.origin-badge.local {
-  color: #86efac;
-}
 
 /* ============================================
    Scrollbar Styling - Subtle and minimal
@@ -1326,9 +1212,6 @@ body,
   animation: fadeIn 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.ai-response-panel {
-  animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
 
 /* Waveform animation */
 @keyframes waveform {
@@ -1381,8 +1264,7 @@ body,
     flex-direction: column;
   }
   
-  .live-insights-panel,
-  .ai-response-panel {
+  .live-insights-panel {
     max-width: none;
     min-width: auto;
   }
