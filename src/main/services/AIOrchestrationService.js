@@ -185,7 +185,7 @@ class AIOrchestrationService extends EventEmitter {
 Your task:
 1. Interpret the transcript in context - make educated guesses about what was likely said based on context
 2. Correct common transcription errors by understanding the intended meaning
-3. Generate 3-5 contextual talking points or suggestions that would be helpful for the speaker to continue or enhance the conversation
+3. Generate 3 VERY CONCISE talking points (max 10 words each) that would be helpful for the speaker to continue or enhance the conversation
 
 Recent conversation transcript (may contain minor errors):
 ${recentVerbatim || 'No recent conversation'}
@@ -199,16 +199,20 @@ Instructions:
 - Generate suggestions that reflect the CORRECTED/INTERPRETED understanding of the conversation
 - Make suggestions that are relevant to what was ACTUALLY being discussed (not the raw transcription errors)
 
-Generate a mix of:
-1. Talking points (general conversation suggestions - things to say or discuss)
-2. Follow-up actions (specific actions like "define X", "get more information about Y", "ask follow-up questions about Z")
+CRITICAL FORMATTING:
+- Talking points: Phrase as conversational statements/questions the user can READ DIRECTLY from the screen and say in the conversation (with minimal changes). These should sound natural and fit right into the conversation flow. Examples: "What about the implementation details?" or "How does this compare to alternatives?" or "That's interesting - tell me more about the pricing model."
+- Follow-up actions: Phrase as explicit actions the user can take. Examples: "Define neural networks" or "Get more info on pricing" or "Ask follow-up questions about use cases"
 
-Format as a numbered list. Each suggestion should be concise and actionable. Examples:
-1. Ask a clarifying question about [topic]
-2. Define [term] that was mentioned
-3. Share a related insight about [concept]
-4. Get more information about [subject]
-5. Suggest follow-up questions`;
+Generate a mix of:
+1. Talking points (conversational phrases the user can read directly - natural questions or statements)
+2. Follow-up actions (explicit actions like "define X", "get info about Y", "ask about Z")
+
+Format as a numbered list. Examples:
+1. What about the implementation details?
+2. Define neural networks
+3. How does this compare to alternatives?
+4. Get more info on pricing
+5. That's interesting - tell me more about that`;
     }
 
     // Other action types can be added here
