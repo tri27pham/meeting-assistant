@@ -2,7 +2,7 @@ const audioConfig = {
   deepgram: {
     apiKey: process.env.DEEPGRAM_API_KEY || '',
     apiUrl: 'wss://api.deepgram.com/v1/listen',
-    model: 'nova-2',
+    model: 'nova-2-general', // Better accuracy model
     language: 'en-US',
     encoding: 'linear16',
     sampleRate: 16000,
@@ -11,7 +11,10 @@ const audioConfig = {
     punctuate: true,
     diarize: false,
     smartFormat: true,
-    endpointing: 100,
+    endpointing: 300, // Balance between responsiveness and accuracy
+    filler_words: true, // Include filler words for better context
+    multichannel: false,
+    alternatives: 1, // Get alternative transcriptions for better accuracy
   },
 
   audioFormat: {

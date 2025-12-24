@@ -7,7 +7,6 @@ function ControlBar({
   isStarting,
   sessionTime,
   onTogglePause,
-  onAskAI,
   onToggleVisibility,
   onResetLayout,
   onOpenSettings,
@@ -32,14 +31,6 @@ function ControlBar({
 
         <div className="session-time">{sessionTime}</div>
       </div>
-
-      <div className="control-divider" />
-
-      <button className="control-btn ask-ai-btn" onClick={onAskAI}>
-        <span>Ask AI</span>
-        <kbd className="shortcut">⌘</kbd>
-        <kbd className="shortcut">↵</kbd>
-      </button>
 
       <div className="control-divider" />
 

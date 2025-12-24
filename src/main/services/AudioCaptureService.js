@@ -127,6 +127,17 @@ class AudioCaptureService extends EventEmitter {
 
     try {
       const float32Data = new Float32Array(chunkData.data);
+      
+      // Debug: Log first chunk processing
+      if (this.microphoneBuffer.length === 0) {
+        console.log('[AudioCaptureService] Processing first microphone chunk:', {
+          dataLength: float32Data.length,
+          sampleRate: chunkData.sampleRate,
+          timestamp: chunkData.timestamp,
+          isCapturing: this.isCapturing,
+          isPaused: this.isPaused
+        });
+      }
 
       this._calculateMicrophoneLevel(float32Data);
 

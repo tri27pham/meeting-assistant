@@ -11,6 +11,8 @@ class DeepgramService extends EventEmitter {
     this.isConnected = false;
     this.isStreaming = false;
     this.keepaliveInterval = null;
+    this.healthCheckInterval = null;
+    this.lastTranscriptTime = null;
 
     const apiKey = audioConfig.deepgram.apiKey;
     if (!apiKey) {
@@ -60,6 +62,8 @@ class DeepgramService extends EventEmitter {
         diarize: audioConfig.deepgram.diarize,
         smart_format: audioConfig.deepgram.smartFormat,
         endpointing: audioConfig.deepgram.endpointing,
+        filler_words: audioConfig.deepgram.filler_words,
+        alternatives: audioConfig.deepgram.alternatives,
       });
       const createEndTime = performance.now();
       console.log(`[DeepgramService] Creating connection took ${(createEndTime - createStartTime).toFixed(2)}ms`);
@@ -78,9 +82,11 @@ class DeepgramService extends EventEmitter {
           console.log(`[DeepgramService] Waiting for Open event took ${(waitEndTime - waitStartTime).toFixed(2)}ms`);
           this.isConnected = true;
           this.isStreaming = false;
+          this.lastTranscriptTime = Date.now();
           this.emit('connected');
           console.log('[DeepgramService] Connected to Deepgram - connection is ready');
           this._startKeepalive();
+          this._startHealthCheck();
           resolve();
         });
 
@@ -108,6 +114,7 @@ class DeepgramService extends EventEmitter {
 
     try {
       this._stopKeepalive();
+      this._stopHealthCheck();
       
       if (this.isStreaming) {
         this.liveConnection.requestClose();
@@ -116,6 +123,7 @@ class DeepgramService extends EventEmitter {
 
       this.liveConnection = null;
       this.isConnected = false;
+      this.lastTranscriptTime = null;
 
       this.emit('disconnected');
       console.log('[DeepgramService] Disconnected from Deepgram');
@@ -135,11 +143,22 @@ class DeepgramService extends EventEmitter {
     this.keepaliveInterval = setInterval(() => {
       if (this.isConnected && this.liveConnection && !this.isStreaming) {
         try {
-          const audioBuffer = Buffer.from(silenceChunk.buffer);
-          this.liveConnection.send(audioBuffer);
+          // Double-check connection is still valid before sending
+          if (this.liveConnection && this.isConnected) {
+            const audioBuffer = Buffer.from(silenceChunk.buffer);
+            this.liveConnection.send(audioBuffer);
+          } else {
+            console.warn('[DeepgramService] Connection lost during keepalive, stopping');
+            this._stopKeepalive();
+            this.isConnected = false;
+            this.emit('error', new Error('Connection lost during keepalive'));
+          }
         } catch (error) {
           console.warn('[DeepgramService] Error sending keepalive:', error.message);
           this._stopKeepalive();
+          this.isConnected = false;
+          this.isStreaming = false;
+          this.emit('error', error);
         }
       } else if (this.isStreaming) {
         // Real audio is flowing, stop keepalive
@@ -155,9 +174,45 @@ class DeepgramService extends EventEmitter {
     }
   }
 
+  _startHealthCheck() {
+    this._stopHealthCheck();
+    
+    // Check connection health every 10 seconds
+    // Note: Deepgram SDK manages connection internally, so we can't check readyState
+    // We rely on the event system (error/close events) to detect connection issues
+    this.healthCheckInterval = setInterval(() => {
+      if (!this.isConnected || !this.liveConnection) {
+        this._stopHealthCheck();
+        return;
+      }
+
+      // Check if we haven't received transcripts in a while but are streaming
+      const timeSinceLastTranscript = this.lastTranscriptTime ? Date.now() - this.lastTranscriptTime : null;
+      if (this.isStreaming && timeSinceLastTranscript && timeSinceLastTranscript > 30000) {
+        // 30 seconds without transcripts while streaming suggests connection issue
+        console.warn('[DeepgramService] Health check: No transcripts for 30s while streaming', {
+          timeSinceLastTranscript,
+          isStreaming: this.isStreaming
+        });
+        // Don't disconnect yet, but log the issue - Deepgram will emit error/close if connection is broken
+      }
+    }, 10000);
+  }
+
+  _stopHealthCheck() {
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval);
+      this.healthCheckInterval = null;
+    }
+  }
+
   streamAudio(chunk) {
     if (!this.isConnected || !this.liveConnection) {
-      console.warn('[DeepgramService] Not connected, cannot stream audio');
+      console.warn('[DeepgramService] Not connected, cannot stream audio', { 
+        isConnected: this.isConnected, 
+        hasConnection: !!this.liveConnection 
+      });
+      this.emit('error', new Error('Cannot stream audio: not connected'));
       return;
     }
 
@@ -172,14 +227,36 @@ class DeepgramService extends EventEmitter {
         return;
       }
 
-      if (!this.isStreaming) {
-        console.log('[DeepgramService] Starting to stream audio to Deepgram');
-        this._stopKeepalive(); // Stop keepalive once real audio starts
+      // Check if connection is still valid before sending
+      if (!this.liveConnection || !this.isConnected) {
+        console.warn('[DeepgramService] Connection lost while streaming, stopping');
+        this.isStreaming = false;
+        this.emit('error', new Error('Connection lost during streaming'));
+        return;
       }
-      this.liveConnection.send(audioBuffer);
-      this.isStreaming = true;
+
+      try {
+        // Deepgram SDK manages connection internally - just send if we think we're connected
+        this.liveConnection.send(audioBuffer);
+        
+        if (!this.isStreaming) {
+          console.log('[DeepgramService] Starting to stream audio to Deepgram');
+          this._stopKeepalive(); // Stop keepalive once real audio starts
+        }
+        this.isStreaming = true;
+      } catch (sendError) {
+        console.error('[DeepgramService] Error sending audio buffer:', sendError);
+        this.isConnected = false;
+        this.isStreaming = false;
+        this._stopKeepalive();
+        this.emit('error', sendError);
+      }
     } catch (error) {
       console.error('[DeepgramService] Error streaming audio:', error);
+      // Connection might be broken, mark as disconnected
+      this.isConnected = false;
+      this.isStreaming = false;
+      this._stopKeepalive();
       this.emit('error', error);
     }
   }
@@ -200,16 +277,31 @@ class DeepgramService extends EventEmitter {
     });
 
     this.liveConnection.on(LiveTranscriptionEvents.Error, (error) => {
-      console.error('[DeepgramService] Deepgram error:', error);
+      console.error('[DeepgramService] Deepgram error:', error, {
+        message: error?.message,
+        type: error?.type,
+        code: error?.code,
+        readyState: this.liveConnection?.readyState
+      });
+      this._stopKeepalive();
+      this._stopHealthCheck();
       this.isConnected = false;
+      this.isStreaming = false;
+      // Don't close connection here - let main.js handle reconnection
       this.emit('error', error);
     });
 
-    this.liveConnection.on(LiveTranscriptionEvents.Close, () => {
-      console.log('[DeepgramService] Connection closed by Deepgram');
+    this.liveConnection.on(LiveTranscriptionEvents.Close, (event) => {
+      console.log('[DeepgramService] Connection closed by Deepgram', { 
+        code: event?.code, 
+        reason: event?.reason,
+        wasClean: event?.wasClean 
+      });
       this._stopKeepalive();
+      this._stopHealthCheck();
       this.isConnected = false;
       this.isStreaming = false;
+      this.lastTranscriptTime = null;
       this.emit('closed');
     });
 
@@ -230,16 +322,17 @@ class DeepgramService extends EventEmitter {
       let timestamp = Date.now();
       let duration = 0;
 
-      if (data.channel && data.channel.alternatives && data.channel.alternatives.length > 0) {
+      // Try multiple data structure patterns
+      if (data.channel?.alternatives?.length > 0) {
         const alternative = data.channel.alternatives[0];
-        transcript = alternative.transcript;
+        transcript = alternative.transcript || alternative.text || null;
         confidence = alternative.confidence || 0;
         isFinal = data.is_final || false;
-        timestamp = data.start || Date.now();
-        duration = data.duration || 0;
-      } else if (data.alternatives && data.alternatives.length > 0) {
+        timestamp = data.start || data.channel.start || Date.now();
+        duration = data.duration || data.channel.duration || 0;
+      } else if (data.alternatives?.length > 0) {
         const alternative = data.alternatives[0];
-        transcript = alternative.transcript;
+        transcript = alternative.transcript || alternative.text || null;
         confidence = alternative.confidence || 0;
         isFinal = data.is_final || false;
         timestamp = data.start || Date.now();
@@ -250,11 +343,18 @@ class DeepgramService extends EventEmitter {
         isFinal = data.is_final || false;
         timestamp = data.start || Date.now();
         duration = data.duration || 0;
+      } else if (data.channel?.transcript) {
+        transcript = data.channel.transcript;
+        confidence = data.channel.confidence || 0;
+        isFinal = data.is_final || false;
+        timestamp = data.start || data.channel.start || Date.now();
+        duration = data.duration || data.channel.duration || 0;
       }
 
-      if (transcript && transcript.trim().length > 0) {
+      // Only emit if we have valid transcript text
+      if (transcript && typeof transcript === 'string' && transcript.trim().length > 0) {
         const transcriptData = {
-          text: transcript,
+          text: transcript.trim(),
           confidence: confidence,
           isFinal: isFinal,
           timestamp: timestamp,
@@ -263,14 +363,29 @@ class DeepgramService extends EventEmitter {
 
         // Emit descriptive event names following service rules
         if (isFinal) {
+          this.lastTranscriptTime = Date.now();
+          console.log('[DeepgramService] Emitting transcript:final', { 
+            text: transcriptData.text.substring(0, 50),
+            confidence: transcriptData.confidence,
+            connectionState: this.isConnected ? 'connected' : 'disconnected'
+          });
           this.emit('transcript:final', transcriptData);
         } else {
+          this.lastTranscriptTime = Date.now();
           this.emit('transcript:partial', transcriptData);
         }
+      } else {
+        // Log when we receive transcript events but no valid text
+        console.log('[DeepgramService] Received transcript event but no valid text', {
+          hasTranscript: !!transcript,
+          transcriptType: typeof transcript,
+          transcriptLength: transcript?.length,
+          isFinal: isFinal
+        });
       }
     } catch (error) {
       console.error('[DeepgramService] Error parsing transcript:', error);
-      console.error('[DeepgramService] Raw transcription data:', data);
+      console.error('[DeepgramService] Raw transcription data:', JSON.stringify(data, null, 2).substring(0, 500));
     }
   }
 

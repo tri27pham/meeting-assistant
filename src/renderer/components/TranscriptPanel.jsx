@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from "react";
-import { CopyIcon } from "./Icons";
+import { CopyIcon, CloseIcon } from "./Icons";
 
-function TranscriptPanel({ transcript = [] }) {
+function TranscriptPanel({ transcript = [], onClose }) {
   const contentRef = useRef(null);
 
   // Auto-scroll to bottom when new transcript arrives
@@ -29,22 +29,6 @@ function TranscriptPanel({ transcript = [] }) {
 
   return (
     <div className="transcript-panel glass-panel">
-      <div className="panel-header">
-        <div className="panel-title">
-          <span>Live transcript</span>
-        </div>
-        <div className="panel-actions">
-          {transcript.length > 0 && (
-            <button
-              className="header-btn icon-only"
-              onClick={handleCopy}
-              aria-label="Copy transcript"
-            >
-              <CopyIcon />
-            </button>
-          )}
-        </div>
-      </div>
       <div className="panel-content" ref={contentRef}>
         {transcript.length === 0 ? (
           <p

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import ControlBar from "./components/ControlBar";
 import LiveInsightsPanel from "./components/LiveInsightsPanel";
-import AIResponsePanel from "./components/AIResponsePanel";
+import TalkingPointsPanel from "./components/TalkingPointsPanel";
+import ActionsPanel from "./components/ActionsPanel";
 import TranscriptPanel from "./components/TranscriptPanel";
 import SettingsPanel from "./components/SettingsPanel";
 import AudioMeterPanel from "./components/AudioMeterPanel";
@@ -11,17 +12,20 @@ import useMicrophoneCapture from "./hooks/useMicrophoneCapture";
 const PANEL_IDS = [
   "control-bar",
   "live-insights",
-  "ai-response",
+  "talking-points",
+  "actions",
   "transcript",
   "settings",
   "audio-meter",
 ];
 
 const PANEL_SIZES = {
-  liveInsights: { width: 420, height: 400 },
-  aiResponse: { width: 450, height: 380 },
-  transcript: { width: 380, height: 350 },
+  liveInsights: { width: 400, height: 250 },
+  talkingPoints: { width: 450, height: 280 },
+  actions: { width: 450, height: 250 }, 
+  transcript: { width: 400, height: 200 },
   audioMeter: { width: 320, height: 200 },
+  settings: { width: 450, height: 200 },
 };
 
 function App() {
@@ -33,9 +37,11 @@ function App() {
 
   const [layoutKey, setLayoutKey] = useState(0);
 
+  const [showLiveInsights, setShowLiveInsights] = useState(true);
+  const [showTalkingPoints, setShowTalkingPoints] = useState(true);
+  const [showActions, setShowActions] = useState(true);
   const [showTranscript, setShowTranscript] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showAiResponse, setShowAiResponse] = useState(true);
   
   // Load audio meter visibility preference from localStorage
   const [showAudioMeter, setShowAudioMeter] = useState(() => {
@@ -60,13 +66,21 @@ function App() {
         x: margin - containerPadding,
         y: topOffset,
       },
-      aiResponse: {
+      talkingPoints: {
         x:
           screenWidth -
-          PANEL_SIZES.aiResponse.width -
+          PANEL_SIZES.talkingPoints.width -
           margin -
           containerPadding,
         y: topOffset,
+      },
+      actions: {
+        x:
+          screenWidth -
+          PANEL_SIZES.actions.width -
+          margin -
+          containerPadding,
+        y: topOffset + PANEL_SIZES.talkingPoints.height + 24, // Position below talking points with spacing
       },
       transcript: {
         x: margin - containerPadding,
@@ -77,53 +91,26 @@ function App() {
         y: 16,
       },
       settings: {
-        x: screenWidth - 400 - margin - containerPadding,
-        y: topOffset + PANEL_SIZES.aiResponse.height + 16,
+        x:
+          screenWidth -
+          PANEL_SIZES.actions.width -
+          margin -
+          containerPadding,
+        y: topOffset + PANEL_SIZES.talkingPoints.height + 24 + PANEL_SIZES.actions.height + 24, // Position below actions panel with spacing
       },
     };
   }, [layoutKey]);
   
-  const [insights, setInsights] = useState({
-    title: "Discussion about news",
-    summary:
-      "You started talking about how there's a lot of big startup acquisitions happening",
-    context: "Neel asked you about who recently acquired Windsurf",
-  });
+  // Start with empty insights - will be populated by AI responses
+  const [insights, setInsights] = useState(null);
 
-  const [actions, setActions] = useState([
-    {
-      id: 1,
-      type: "define",
-      label: "Define startup acquisition",
-      icon: "book",
-    },
-    {
-      id: 2,
-      type: "search",
-      label: "Search the web for information about Windsurf acquisition",
-      icon: "globe",
-    },
-    {
-      id: 3,
-      type: "followup",
-      label: "Suggest follow-up questions",
-      icon: "chat",
-    },
-    {
-      id: 4,
-      type: "help",
-      label: "Give me helpful information",
-      icon: "sparkle",
-    },
-  ]);
+  // Talking points for Live Insights Panel (suggested things to say)
+  const [talkingPoints, setTalkingPoints] = useState([]);
 
-  const [selectedAction, setSelectedAction] = useState(2);
+  // Follow-up actions for Actions Panel (define, get questions, etc.)
+  const [actions, setActions] = useState([]);
 
-  const [aiResponse, setAiResponse] = useState({
-    action: "Search the web for information...",
-    content: `On July 14, 2025, Cognition acquired the remainder of Windsurf to integrate into its Devin platform\n\nIncludes Windsurf's agentic IDE, IP, brand, $82 M ARR, 350+ enterprise clients, and full team`,
-    origin: "cloud",
-  });
+  const [selectedAction, setSelectedAction] = useState(null);
 
   const [transcript, setTranscript] = useState([]);
   const [audioLevels, setAudioLevels] = useState({
@@ -132,32 +119,39 @@ function App() {
     mixed: 0,
   });
 
+  // Memoize callbacks to prevent hook from restarting unnecessarily
+  const handleMicError = useCallback((error) => {
+    console.error("[App] Microphone capture error:", error);
+    setIsStarting(false);
+  }, []);
+
+  const handleMicAudioLevel = useCallback((level) => {
+    setAudioLevels((prev) => ({
+      ...prev,
+      microphone: level,
+    }));
+  }, []);
+
+  const handleMicReady = useCallback(() => {
+    // Mic is capturing audio, everything is ready
+    try {
+      const readyTime = performance.now();
+      const startTime = sessionStartTimeRef.current || readyTime;
+      console.log(`[App] Microphone ready, total initialization: ${(readyTime - startTime).toFixed(2)}ms`);
+    } catch (e) {
+      console.log("[App] Microphone ready");
+    }
+    setIsStarting(false);
+    setShowTranscript(true);
+  }, []);
+
   // Microphone capture hook
   const microphoneCapture = useMicrophoneCapture({
     enabled: isRunning,
     paused: isPaused,
-    onError: (error) => {
-      console.error("[App] Microphone capture error:", error);
-      setIsStarting(false);
-    },
-    onAudioLevel: (level) => {
-      setAudioLevels((prev) => ({
-        ...prev,
-        microphone: level,
-      }));
-    },
-    onReady: () => {
-      // Mic is capturing audio, everything is ready
-      try {
-        const readyTime = performance.now();
-        const startTime = sessionStartTimeRef.current || readyTime;
-        console.log(`[App] Microphone ready, total initialization: ${(readyTime - startTime).toFixed(2)}ms`);
-      } catch (e) {
-        console.log("[App] Microphone ready");
-      }
-      setIsStarting(false);
-      setShowTranscript(true);
-    },
+    onError: handleMicError,
+    onAudioLevel: handleMicAudioLevel,
+    onReady: handleMicReady,
   });
 
   useEffect(() => {
@@ -207,25 +201,24 @@ function App() {
       setInsights(newInsights);
     });
 
-    const unsubTrigger = window.cluely.on.triggerAISuggestion(() => {
-      setShowAiResponse((prev) => {
-        const newValue = !prev;
-        if (newValue && window.cluely) {
-          window.cluely.ai.triggerAction("manual", {
-            timestamp: Date.now(),
-          }).catch((err) => {
-            console.error("[App] Error triggering AI action:", err);
-          });
-        }
-        return newValue;
-      });
-    });
-
     const unsubResetLayout = window.cluely.on?.resetLayout?.(() => {
+      // Close settings panel if open
+      setShowSettings(false);
+      
+      // Restore live insights, talking points, and actions panels to default positions
+      setShowLiveInsights(true);
+      setShowTalkingPoints(true);
+      setShowActions(true);
+      
       PANEL_IDS.forEach((panelId) => {
         localStorage.removeItem(`cluely-panel-pos-${panelId}`);
         localStorage.removeItem(`cluely-panel-size-${panelId}`);
       });
+      
+      // Also reset audio meter panel
+      localStorage.removeItem(`cluely-panel-pos-audio-meter`);
+      localStorage.removeItem(`cluely-panel-size-audio-meter`);
+      
       setLayoutKey((prev) => prev + 1);
     });
 
@@ -233,14 +226,101 @@ function App() {
       setShowTranscript((prev) => !prev);
     });
 
+    // Listen to AI response events to update talking points and actions
+    let unsubAIResponse = null;
+    if (window.cluely && window.cluely.on && window.cluely.on.aiResponse) {
+      unsubAIResponse = window.cluely.on.aiResponse((data) => {
+        // Accept 'suggestion' or 'suggest' action types (both are talking point suggestions)
+        if ((data.actionType === 'suggestion' || data.actionType === 'suggest')) {
+          // Update insights if provided
+          if (data.insights && !data.isPartial) {
+            setInsights(data.insights);
+          }
+
+          // Separate talking points (general suggestions) from actions (define, get questions, etc.)
+          if (!data.suggestions) return;
+          
+          const newTalkingPoints = [];
+          const newActions = [];
+
+          data.suggestions.forEach((suggestion) => {
+            const label = suggestion.label || suggestion.text || 'Untitled';
+            const type = suggestion.type || 'suggest';
+            
+            // Use the type field from AI service: 'action' = follow-up action, 'suggest' = talking point
+            if (type === 'action') {
+              // This is a follow-up action (app should perform this)
+              newActions.push({
+                id: suggestion.id || `action-${Date.now()}-${newActions.length}`,
+                type: 'action',
+                label,
+                icon: suggestion.icon || 'lightbulb',
+              });
+            } else {
+              // This is a talking point (user can read verbatim)
+              newTalkingPoints.push({
+                id: suggestion.id || `talking-point-${Date.now()}-${newTalkingPoints.length}`,
+                label,
+                text: suggestion.text || label,
+              });
+            }
+          });
+
+          // Debug logging
+          console.log('[App] Categorized suggestions:', {
+            total: data.suggestions.length,
+            actions: newActions.length,
+            talkingPoints: newTalkingPoints.length,
+            actionLabels: newActions.map(a => a.label),
+            talkingPointLabels: newTalkingPoints.map(t => t.label)
+          });
+
+          if (data.isPartial) {
+            // Merge partial suggestions
+            if (newTalkingPoints.length > 0) {
+              setTalkingPoints((prev) => {
+                const partialIds = new Set(newTalkingPoints.map((p) => p.id));
+                const existing = prev.filter((p) => !partialIds.has(p.id));
+                return [...existing, ...newTalkingPoints];
+              });
+            }
+            if (newActions.length > 0) {
+              setActions((prev) => {
+                const partialIds = new Set(newActions.map((a) => a.id));
+                const existing = prev.filter((a) => !partialIds.has(a.id));
+                return [...existing, ...newActions];
+              });
+            }
+          } else {
+            // Replace with complete suggestions
+            if (newTalkingPoints.length > 0) {
+              setTalkingPoints(() => [...newTalkingPoints]);
+            }
+            if (newActions.length > 0) {
+              setActions(() => [...newActions]);
+            }
+          }
+        }
+      });
+    }
+
+    // Listen to AI error events
+    let unsubAIError = null;
+    if (window.cluely && window.cluely.on && window.cluely.on.aiError) {
+      unsubAIError = window.cluely.on.aiError((error) => {
+        console.error('[App] AI error:', error);
+      });
+    }
+
     return () => {
       unsubTranscript();
       if (unsubAudioLevels) unsubAudioLevels();
       unsubSuggestion?.();
       unsubInsights?.();
-      unsubTrigger?.();
       unsubResetLayout?.();
       unsubToggleTranscript?.();
+      unsubAIResponse?.();
+      unsubAIError?.();
     };
   }, []);
 
@@ -258,25 +338,31 @@ function App() {
         console.log("[App] Starting session...");
         setIsStarting(true);
         
+        // CRITICAL: Start microphone capture IMMEDIATELY on user interaction
+        // This ensures AudioContext is unlocked with user gesture (required by browser autoplay policy)
+        console.log("[App] Enabling microphone capture immediately (user interaction)...");
+        setIsRunning(true); // Enable mic hook immediately to unlock AudioContext
+        setIsPaused(false);
+        
         const sessionStartTime = performance.now();
         const result = await window.cluely.session.start();
         const sessionEndTime = performance.now();
         console.log(`[App] session.start() took ${(sessionEndTime - sessionStartTime).toFixed(2)}ms`, result);
         
         if (result && result.success) {
-          setIsRunning(true);
-          setIsPaused(false);
           setSessionTime(0);
           setTranscript([]);
-          console.log("[App] Session started, waiting for microphone...");
+          console.log("[App] Session started, microphone should be initializing...");
           // Don't show transcript or hide spinner yet - wait for onReady callback from mic
         } else {
           console.error("[App] Failed to start session:", result?.error || "Unknown error");
           setIsStarting(false);
+          setIsRunning(false); // Disable if session start failed
         }
       } catch (error) {
         console.error("[App] Error starting session:", error);
         setIsStarting(false);
+        setIsRunning(false); // Disable if error
       }
     } else if (isPaused) {
       await window.cluely.session.togglePause();
@@ -287,25 +373,6 @@ function App() {
     }
   }, [isRunning, isPaused]);
 
-  const handleAskAI = useCallback(async () => {
-    if (showAiResponse) {
-      setShowAiResponse(false);
-      if (window.cluely?.window?.mouseLeavePanel) {
-        window.cluely.window.mouseLeavePanel();
-      }
-    } else {
-      setShowAiResponse(true);
-      if (window.cluely) {
-        try {
-          await window.cluely.ai.triggerAction("manual", {
-            timestamp: Date.now(),
-          });
-        } catch (err) {
-          console.error("[App] Error triggering AI action:", err);
-      }
-      }
-    }
-  }, [showAiResponse]);
 
   const handleToggleVisibility = useCallback(() => {
     if (window.cluely) {
@@ -326,28 +393,43 @@ function App() {
     [actions],
   );
 
-  const handleCopyResponse = useCallback(() => {
-    if (aiResponse?.content) {
-      navigator.clipboard.writeText(aiResponse.content);
-    }
-  }, [aiResponse?.content]);
-
-  const handleCloseResponse = useCallback(() => {
-    setAiResponse(null);
-    setShowAiResponse(false);
-    if (window.cluely?.window?.mouseLeavePanel) {
-      window.cluely.window.mouseLeavePanel();
-    }
-  }, []);
-
   const handleCopyInsights = useCallback(() => {}, []);
 
   const handleToggleSettings = useCallback(() => {
-    setShowSettings((prev) => !prev);
+    setShowSettings((prev) => {
+      const willShow = !prev;
+      if (willShow) {
+        // Clear saved size and position so panel uses default when opened
+        localStorage.removeItem('cluely-panel-size-settings');
+        localStorage.removeItem('cluely-panel-pos-settings');
+      }
+      return willShow;
+    });
   }, []);
 
   const handleCloseSettings = useCallback(() => {
     setShowSettings(false);
+  }, []);
+
+  const handleCloseLiveInsights = useCallback(() => {
+    setShowLiveInsights(false);
+  }, []);
+
+  const handleCloseTalkingPoints = useCallback(() => {
+    setShowTalkingPoints(false);
+  }, []);
+
+  const handleCloseActions = useCallback(() => {
+    setShowActions(false);
+  }, []);
+
+  const handleCloseTranscript = useCallback(() => {
+    setShowTranscript(false);
+  }, []);
+
+  const handleCloseAudioMeter = useCallback(() => {
+    setShowAudioMeter(false);
+    localStorage.setItem('cluely-show-audio-meter', 'false');
   }, []);
 
   const handleToggleAudioMeter = useCallback((enabled) => {
@@ -356,6 +438,14 @@ function App() {
   }, []);
 
   const handleResetLayout = useCallback(() => {
+    // Close settings panel if open
+    setShowSettings(false);
+    
+    // Restore live insights, talking points, and actions panels to default positions
+    setShowLiveInsights(true);
+    setShowTalkingPoints(true);
+    setShowActions(true);
+    
     PANEL_IDS.forEach((panelId) => {
       localStorage.removeItem(`cluely-panel-pos-${panelId}`);
       localStorage.removeItem(`cluely-panel-size-${panelId}`);
@@ -390,45 +480,62 @@ function App() {
           isStarting={isStarting}
           sessionTime={formatTime(sessionTime)}
           onTogglePause={handleTogglePause}
-          onAskAI={handleAskAI}
           onToggleVisibility={handleToggleVisibility}
           onResetLayout={handleResetLayout}
           onOpenSettings={handleToggleSettings}
         />
       </DraggablePanel>
       
-      <DraggablePanel
-        key={`live-insights-${layoutKey}`}
-        panelId="live-insights"
-        initialPosition={defaultPositions.liveInsights}
-        initialSize={PANEL_SIZES.liveInsights}
-        minSize={{ width: 320, height: 300 }}
-        maxSize={{ width: 600, height: 700 }}
-        resizable={true}
-      >
-        <LiveInsightsPanel
-          insights={insights}
-          actions={actions}
-          selectedAction={selectedAction}
-          onActionSelect={handleActionSelect}
-          onCopyInsights={handleCopyInsights}
-        />
-      </DraggablePanel>
-
-      {showAiResponse && (
-        <DraggablePanel 
-          key={`ai-response-${layoutKey}`}
-          panelId="ai-response"
-          initialPosition={defaultPositions.aiResponse}
-          initialSize={PANEL_SIZES.aiResponse}
-          minSize={{ width: 340, height: 280 }}
-          maxSize={{ width: 650, height: 700 }}
+      {showLiveInsights && (
+        <DraggablePanel
+          key={`live-insights-${layoutKey}`}
+          panelId="live-insights"
+          initialPosition={defaultPositions.liveInsights}
+          initialSize={PANEL_SIZES.liveInsights}
+          minSize={{ width: 280, height: 200 }}
+          maxSize={{ width: 500, height: 500 }}
           resizable={true}
         >
-          <AIResponsePanel
-            response={aiResponse}
-            onCopy={handleCopyResponse}
-            onClose={handleCloseResponse}
+          <LiveInsightsPanel
+            insights={insights}
+            onCopyInsights={handleCopyInsights}
+            onClose={handleCloseLiveInsights}
+          />
+        </DraggablePanel>
+      )}
+
+      {showTalkingPoints && (
+        <DraggablePanel
+          key={`talking-points-${layoutKey}`}
+          panelId="talking-points"
+          initialPosition={defaultPositions.talkingPoints}
+          initialSize={PANEL_SIZES.talkingPoints}
+          minSize={{ width: 280, height: 150 }}
+          maxSize={{ width: 500, height: 400 }}
+          resizable={true}
+        >
+          <TalkingPointsPanel
+            talkingPoints={talkingPoints}
+            onClose={handleCloseTalkingPoints}
+          />
+        </DraggablePanel>
+      )}
+
+      {showActions && (
+        <DraggablePanel
+          key={`actions-${layoutKey}`}
+          panelId="actions"
+          initialPosition={defaultPositions.actions}
+          initialSize={PANEL_SIZES.actions}
+          minSize={{ width: 320, height: 180 }}
+          maxSize={{ width: 700, height: 450 }}
+          resizable={true}
+        >
+          <ActionsPanel
+            actions={actions}
+            selectedAction={selectedAction}
+            onActionSelect={handleActionSelect}
+            onClose={handleCloseActions}
           />
         </DraggablePanel>
       )}
@@ -443,7 +550,7 @@ function App() {
           maxSize={{ width: 500, height: 600 }}
           resizable={true}
         >
-          <TranscriptPanel transcript={transcript} />
+          <TranscriptPanel transcript={transcript} onClose={handleCloseTranscript} />
         </DraggablePanel>
       )}
 
@@ -466,7 +573,7 @@ function App() {
           key={`settings-${layoutKey}`}
           panelId="settings"
           initialPosition={defaultPositions.settings}
-          initialSize={{ width: 400, height: 350 }}
+          initialSize={PANEL_SIZES.settings}
           minSize={{ width: 320, height: 280 }}
           maxSize={{ width: 600, height: 700 }}
           resizable={true}

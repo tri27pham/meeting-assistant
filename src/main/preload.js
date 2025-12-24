@@ -34,6 +34,11 @@ contextBridge.exposeInMainWorld("cluely", {
     },
   },
 
+  // Console log forwarding (for debugging)
+  log: (level, message) => {
+    ipcRenderer.send("renderer:console-log", level, message);
+  },
+
   // Event listeners for backend → UI communication
   on: {
     // Receive transcript updates from backend
@@ -66,11 +71,6 @@ contextBridge.exposeInMainWorld("cluely", {
       return () => ipcRenderer.removeAllListeners("insights:update");
     },
 
-    // Manual trigger from hotkey
-    triggerAISuggestion: (callback) => {
-      ipcRenderer.on("ai:trigger-suggestion", () => callback());
-      return () => ipcRenderer.removeAllListeners("ai:trigger-suggestion");
-    },
 
     // Reset layout trigger from hotkey
     resetLayout: (callback) => {
@@ -94,6 +94,18 @@ contextBridge.exposeInMainWorld("cluely", {
     audioLevelsUpdate: (callback) => {
       ipcRenderer.on("audio:levels-update", (event, levels) => callback(levels));
       return () => ipcRenderer.removeAllListeners("audio:levels-update");
+    },
+
+    // AI response events (partial and complete)
+    aiResponse: (callback) => {
+      ipcRenderer.on("ai:response", (event, data) => callback(data));
+      return () => ipcRenderer.removeAllListeners("ai:response");
+    },
+
+    // AI error events
+    aiError: (callback) => {
+      ipcRenderer.on("ai:error", (event, error) => callback(error));
+      return () => ipcRenderer.removeAllListeners("ai:error");
     },
   },
 });

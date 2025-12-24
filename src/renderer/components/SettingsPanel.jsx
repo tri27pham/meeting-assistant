@@ -7,10 +7,6 @@ const hotkeys = [
     description: "Show/Hide overlay",
   },
   {
-    keys: ["⌘", "↵"],
-    description: "Ask AI (toggle AI response panel)",
-  },
-  {
     keys: ["⌘", "\\"],
     description: "Reset panel positions and sizes",
   },
@@ -45,8 +41,8 @@ function ChevronIcon({ isExpanded }) {
 }
 
 function SettingsPanel({ onClose, showAudioMeter, onToggleAudioMeter }) {
-  const [isHotkeysExpanded, setIsHotkeysExpanded] = useState(true);
-  const [isDisplayExpanded, setIsDisplayExpanded] = useState(true);
+  const [isHotkeysExpanded, setIsHotkeysExpanded] = useState(false);
+  const [isDisplayExpanded, setIsDisplayExpanded] = useState(false);
 
   return (
     <div className="settings-panel glass-panel">
