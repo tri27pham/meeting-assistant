@@ -33,7 +33,7 @@ function TalkingPointsPanel({
         {talkingPoints && talkingPoints.length > 0 ? (
           <div className="talking-points-section">
             <div className="talking-points-list">
-              {talkingPoints.map((point) => (
+              {talkingPoints.slice(0, 3).map((point) => (
                 <div key={point.id} className="talking-point-item">
                   <LightbulbIcon className="talking-point-icon" />
                   <span className="talking-point-label">{point.label || point.text || 'Untitled'}</span>

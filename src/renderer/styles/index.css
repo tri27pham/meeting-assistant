@@ -1008,6 +1008,8 @@ body,
   gap: 2px;
   flex: 1;
   min-height: 0;
+  width: 100%;
+  align-items: stretch;
 }
 
 .actions-list:only-child {
@@ -1219,6 +1221,8 @@ body,
   text-align: left;
   font-family: inherit;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .action-item:hover {
@@ -1273,6 +1277,8 @@ body,
   color: var(--text-primary);
   flex: 1;
   line-height: 1.4;
+  min-width: 0;
+  word-wrap: break-word;
 }
 
 /* ============================================

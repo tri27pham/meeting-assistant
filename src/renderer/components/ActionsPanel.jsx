@@ -9,6 +9,8 @@ import {
   SparkleIcon,
 } from "./Icons";
 
+const MAX_ACTIONS_DISPLAYED = 3;
+
 function ActionsPanel({
   actions,
   selectedAction,
@@ -58,7 +60,7 @@ function ActionsPanel({
         {actions && actions.length > 0 ? (
           <div className="actions-section">
             <div className="actions-list">
-              {actions.slice(0, 3).map((action) => (
+              {actions.slice(0, MAX_ACTIONS_DISPLAYED).map((action) => (
                 <button
                   key={action.id}
                   className={`action-item ${selectedAction === action.id ? "selected" : ""}`}

@@ -33,7 +33,7 @@ function LiveInsightsPanel({
           {insights && insights.bullets && insights.bullets.length > 0 ? (
           <div className="insights-content">
               <ul className="insights-bullets">
-                {insights.bullets.map((bullet, index) => (
+                {insights.bullets.slice(0, 3).map((bullet, index) => (
                   <li key={index} className="insights-bullet-item">
                     {bullet}
                   </li>

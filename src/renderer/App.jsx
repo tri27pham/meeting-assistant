@@ -246,40 +246,33 @@ function App() {
           data.suggestions.forEach((suggestion) => {
             const label = suggestion.label || suggestion.text || 'Untitled';
             const type = suggestion.type || 'suggest';
-            const labelLower = label.toLowerCase();
             
-            // Categorize: actions are things like "define", "get questions", "get more information", etc.
-            // Talking points are general conversation suggestions
-            const isAction = 
-              type === 'define' || 
-              type === 'question' || 
-              labelLower.includes('define') || 
-              labelLower.includes('question') ||
-              labelLower.includes('follow-up') ||
-              labelLower.includes('follow up') ||
-              labelLower.includes('get more') ||
-              labelLower.includes('get information') ||
-              labelLower.includes('search') ||
-              labelLower.includes('look up') ||
-              labelLower.includes('explain') ||
-              labelLower.startsWith('ask ') ||
-              labelLower.startsWith('get ') ||
-              labelLower.startsWith('find ');
-            
-            if (isAction) {
+            // Use the type field from AI service: 'action' = follow-up action, 'suggest' = talking point
+            if (type === 'action') {
+              // This is a follow-up action (app should perform this)
               newActions.push({
                 id: suggestion.id || `action-${Date.now()}-${newActions.length}`,
-                type,
+                type: 'action',
                 label,
-                icon: suggestion.icon || (type === 'question' ? 'help-circle' : type === 'define' ? 'book' : 'lightbulb'),
+                icon: suggestion.icon || 'lightbulb',
               });
             } else {
+              // This is a talking point (user can read verbatim)
               newTalkingPoints.push({
                 id: suggestion.id || `talking-point-${Date.now()}-${newTalkingPoints.length}`,
                 label,
                 text: suggestion.text || label,
               });
             }
+          });
+
+          // Debug logging
+          console.log('[App] Categorized suggestions:', {
+            total: data.suggestions.length,
+            actions: newActions.length,
+            talkingPoints: newTalkingPoints.length,
+            actionLabels: newActions.map(a => a.label),
+            talkingPointLabels: newTalkingPoints.map(t => t.label)
           });
 
           if (data.isPartial) {
