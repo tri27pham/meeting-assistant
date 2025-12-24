@@ -43,10 +43,17 @@ class AIOrchestrationService extends EventEmitter {
   _handleContextUpdate(snapshot, isTopicChange = false) {
     console.log('[AIOrchestrationService] _handleContextUpdate called', { isTopicChange, recentCount: snapshot.recentVerbatim?.length || 0 });
     
-    // Cancel any in-flight request
-    if (this.inFlightRequest) {
-      console.log('[AIOrchestrationService] Canceling in-flight request');
+    // Only cancel in-flight requests on topic changes (more important)
+    // For periodic updates, let the current request finish if it's in progress
+    if (isTopicChange && this.inFlightRequest) {
+      console.log('[AIOrchestrationService] Topic change detected - canceling in-flight request');
       this._cancelInFlightRequest();
+    } else if (this.inFlightRequest) {
+      console.log('[AIOrchestrationService] Periodic update received, but request in progress - will wait for completion');
+      // Don't cancel - let the current request finish
+      // Clear debounce timer and return early
+      clearTimeout(this.debounceTimer);
+      return;
     }
 
     // Clear debounce timer
@@ -65,6 +72,11 @@ class AIOrchestrationService extends EventEmitter {
 
       console.log('[AIOrchestrationService] Setting debounce timer', { recentCount, debounceMs });
       this.debounceTimer = setTimeout(() => {
+        // Check again if a request is in flight before starting a new one
+        if (this.inFlightRequest) {
+          console.log('[AIOrchestrationService] Debounce timer fired but request still in flight, skipping');
+          return;
+        }
         console.log('[AIOrchestrationService] Debounce timer fired, generating suggestions');
         this._generateSuggestions();
       }, debounceMs);
@@ -202,41 +214,79 @@ class AIOrchestrationService extends EventEmitter {
 Your task:
 1. Interpret the transcript in context - make educated guesses about what was likely said based on context
 2. Correct common transcription errors by understanding the intended meaning
-3. Generate LIVE INSIGHTS: Provide 2-3 bullet points (STRICTLY 30 words total maximum) that are short, concise, and provide deeper context about the current topic. Each bullet should be 8-12 words maximum. Focus on key insights that help the user understand the topic better.
-4. Generate 3 VERY CONCISE talking points (max 10 words each) that would be helpful for the speaker to continue or enhance the conversation
+3. Generate three distinct types of output based on the conversation
 
 Recent conversation transcript (may contain minor errors):
 ${recentVerbatim}
 
 ${summarizedHistory ? `Previous context:\n${summarizedHistory}\n\n` : ''}
 
-CRITICAL: Base your insights and suggestions ONLY on what is actually discussed in the conversation transcript above. Do NOT use generic examples or topics not mentioned in the conversation.
+CRITICAL: Base your output ONLY on what is actually discussed in the conversation transcript above. Do NOT use generic examples or topics not mentioned in the conversation.
+
+FOCUS REQUIREMENT:
+- Your response MUST focus primarily on the NEWEST part of the transcript (the "Recent conversation transcript" section above)
+- Only reference previous context when it is directly relevant to understanding or expanding on the current topic
+- Do NOT generate insights, talking points, or actions about topics that are only mentioned in previous context unless they are actively being discussed in the recent transcript
+- Prioritize what is being discussed RIGHT NOW in the conversation
 
 Instructions:
 - Use context clues to interpret unclear or incorrectly transcribed words
-- If you see "g b t" or "g p t" in context of AI, interpret it as "GPT" or "ChatGPT"
 - If you see partial words or unclear phrases, use the surrounding context to infer meaning
-- Generate suggestions that reflect the CORRECTED/INTERPRETED understanding of the conversation
-- Make suggestions that are relevant to what was ACTUALLY being discussed (not the raw transcription errors)
+- Generate output that reflects the CORRECTED/INTERPRETED understanding of the conversation
 - ONLY generate insights about topics actually mentioned in the conversation
+- Focus on the most recent discussion points
 
-OUTPUT FORMAT:
-Start with "INSIGHTS:" followed by 2-3 bullet points (STRICTLY 30 words total maximum). Each bullet should be 8-12 words maximum. Be concise and focus on key insights that provide deeper context. Use bullet format with "- " prefix.
+CRITICAL OUTPUT FORMAT REQUIREMENTS:
+You MUST follow this EXACT format. Do NOT deviate. Do NOT add extra text before or after these sections. Do NOT use markdown formatting. Use ONLY the exact section headers and formatting shown below.
 
-Then provide "SUGGESTIONS:" followed by a numbered list of:
-- Talking points: Phrase as conversational statements/questions the user can READ DIRECTLY from the screen and say in the conversation (with minimal changes). These should sound natural and fit right into the conversation flow. Examples: "What about the implementation details?" or "How does this compare to alternatives?"
-- Follow-up actions: Phrase as explicit actions the user can take. Examples: "Get more info on pricing" or "Ask about use cases"
+OUTPUT FORMAT (copy this structure exactly):
 
-Example format (for a conversation about project management):
 INSIGHTS:
-- Project timelines depend on team size and complexity
-- Budget constraints often impact feature scope
-- Stakeholder communication is critical for success
+- [First insight, 8-12 words max]
+- [Second insight, 8-12 words max]
+- [Third insight, 8-12 words max]
 
-SUGGESTIONS:
-1. What about the timeline?
-2. How does this affect the budget?
-3. Get more info on stakeholder requirements`;
+TALKING POINTS:
+1. [First talking point, max 10 words]
+2. [Second talking point, max 10 words]
+3. [Third talking point, max 10 words]
+
+FOLLOW-UP ACTIONS:
+1. [First action, max 15 words]
+2. [Second action, max 15 words]
+3. [Third action, max 15 words]
+
+FORMATTING RULES (STRICTLY ENFORCED):
+1. Start with "INSIGHTS:" on its own line (no leading text)
+2. Each insight MUST start with "- " (dash followed by space)
+3. Each insight MUST be on its own line
+4. After the last insight, add a blank line
+5. Then "TALKING POINTS:" on its own line
+6. Each talking point MUST start with a number followed by ". " (e.g., "1. ", "2. ", "3. ")
+7. Each talking point MUST be on its own line
+8. After the last talking point, add a blank line
+9. Then "FOLLOW-UP ACTIONS:" on its own line
+10. Each action MUST start with a number followed by ". " (e.g., "1. ", "2. ", "3. ")
+11. Each action MUST be on its own line
+12. Do NOT add any text after the last action
+13. Do NOT use markdown, asterisks, or other formatting symbols
+14. Do NOT include explanations or additional commentary
+
+Example (copy this structure exactly):
+INSIGHTS:
+- Product launched in Q2 2023 with strong initial adoption
+- Pricing strategy focuses on enterprise customers
+- Key differentiator is real-time collaboration features
+
+TALKING POINTS:
+1. What about the pricing tiers?
+2. How does this compare to competitors?
+3. What's the adoption rate been like?
+
+FOLLOW-UP ACTIONS:
+1. Get more info on pricing structure
+2. Find out when the product officially launched
+3. Look up how much revenue they made last year`;
     }
 
     // Other action types can be added here
@@ -304,25 +354,49 @@ SUGGESTIONS:
   }
 
   _extractPartialSuggestions(partialText) {
-    // Extract suggestions from partial response
-    // Look for numbered lists, bullet points, etc.
-    const lines = partialText.split('\n').filter((l) => l.trim());
+    // Extract suggestions from partial streaming response
+    // Look for numbered list patterns in TALKING POINTS and FOLLOW-UP ACTIONS sections
     const suggestions = [];
-
-    for (const line of lines) {
-      // Match patterns like "1. ", "- ", "* ", etc.
-      const match = line.match(/^[\d\-\*•]\s*[\.\)]\s*(.+)/);
-      if (match) {
-        suggestions.push({
-          id: `partial-${suggestions.length}`,
-          type: 'suggest',
-          label: match[1].trim(),
-          icon: 'lightbulb',
-        });
+    
+    // Normalize text
+    const normalized = partialText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    
+    // Try to extract from TALKING POINTS section (strict format)
+    const talkingPointsMatch = normalized.match(/TALKING POINTS:\s*\n((?:\d+\.\s+.+\n?)+)/m);
+    if (talkingPointsMatch && talkingPointsMatch[1]) {
+      const lines = talkingPointsMatch[1].split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      for (const line of lines) {
+        const match = line.match(/^\d+\.\s+(.+)$/);
+        if (match && match[1]) {
+          suggestions.push({
+            id: `partial-talking-${suggestions.length}`,
+            type: 'suggest',
+            label: match[1].trim(),
+            icon: 'lightbulb',
+          });
+        }
       }
     }
-
-    return suggestions.slice(0, 3); // Return first 3 partial suggestions
+    
+    // Try to extract from FOLLOW-UP ACTIONS section (strict format)
+    const actionsMatch = normalized.match(/FOLLOW-UP ACTIONS:\s*\n((?:\d+\.\s+.+\n?)+)/m);
+    if (actionsMatch && actionsMatch[1]) {
+      const lines = actionsMatch[1].split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      for (const line of lines) {
+        const match = line.match(/^\d+\.\s+(.+)$/);
+        if (match && match[1]) {
+          suggestions.push({
+            id: `partial-action-${suggestions.length}`,
+            type: 'action',
+            label: match[1].trim(),
+            icon: 'lightbulb',
+          });
+        }
+      }
+    }
+    
+    // Return up to 6 partial suggestions (3 talking points + 3 actions)
+    return suggestions.slice(0, 6);
   }
 
   processResponse(response, actionType) {
@@ -332,88 +406,96 @@ SUGGESTIONS:
     let insights = null;
     const suggestions = [];
     
-    // Extract insights section - now expects bullet points
-    const insightsMatch = response.match(/INSIGHTS:\s*(.+?)(?=SUGGESTIONS:|$)/is);
+    // Normalize response: remove any leading/trailing whitespace and normalize line endings
+    const normalizedResponse = response.trim().replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    
+    // Extract INSIGHTS section - look for exact format
+    const insightsMatch = normalizedResponse.match(/^INSIGHTS:\s*\n((?:-\s+.+\n?)+)/m);
     if (insightsMatch && insightsMatch[1]) {
       const insightsText = insightsMatch[1].trim();
-      // Extract bullet points (lines starting with "- ", "• ", "* ", or numbered)
-      const lines = insightsText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
       const bullets = [];
       
+      // Split by lines and extract bullet points
+      const lines = insightsText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      
       for (const line of lines) {
-        // Match bullet points: "- text", "• text", "* text", or "1. text"
-        const bulletMatch = line.match(/^[-\*•]\s*(.+)$/) || line.match(/^\d+[\.\)]\s*(.+)$/);
-        if (bulletMatch) {
+        // Match lines starting with "- " (dash-space)
+        const bulletMatch = line.match(/^-\s+(.+)$/);
+        if (bulletMatch && bulletMatch[1]) {
           bullets.push(bulletMatch[1].trim());
-        } else if (line && !line.match(/^(INSIGHTS|SUGGESTIONS):/i)) {
-          // If no bullet prefix, treat the line as a bullet point
-          bullets.push(line);
         }
       }
       
       if (bullets.length > 0) {
         insights = {
-          bullets: bullets,
+          bullets: bullets.slice(0, 3), // Limit to exactly 3 insights
         };
+        console.log('[AIOrchestrationService] Extracted insights', insights);
       } else {
-        // Fallback: if no bullets found, use the text as-is
-        insights = {
-          bullets: [insightsText],
-        };
+        console.warn('[AIOrchestrationService] No valid insights found in expected format');
       }
-      console.log('[AIOrchestrationService] Extracted insights', insights);
+    } else {
+      console.warn('[AIOrchestrationService] INSIGHTS section not found in expected format');
     }
     
-    // Extract suggestions section
-    const suggestionsMatch = response.match(/SUGGESTIONS:\s*(.+)/is);
-    const suggestionsText = suggestionsMatch ? suggestionsMatch[1] : response;
+    // Extract TALKING POINTS section - look for exact format
+    const talkingPointsMatch = normalizedResponse.match(/TALKING POINTS:\s*\n((?:\d+\.\s+.+\n?)+)/m);
+    const talkingPointsText = talkingPointsMatch ? talkingPointsMatch[1] : '';
     
-    // First try splitting by newlines
-    let lines = suggestionsText.split('\n').filter((l) => l.trim());
+    // Extract FOLLOW-UP ACTIONS section - look for exact format
+    const actionsMatch = normalizedResponse.match(/FOLLOW-UP ACTIONS:\s*\n((?:\d+\.\s+.+\n?)+)/m);
+    const actionsText = actionsMatch ? actionsMatch[1] : '';
     
-    // If we only have one line, try splitting by numbered patterns (e.g., "1. ...2. ...3. ...")
-    if (lines.length === 1) {
-      console.log('[AIOrchestrationService] Single line detected, attempting to split by numbered patterns');
-      // Match pattern: number followed by period/space, then text, followed by another number
-      // This regex finds: "1. text2. text3. text" and splits it
-      const numberedPattern = /(\d+[\.\)]\s*[^\d]+?)(?=\d+[\.\)]|$)/g;
-      const matches = lines[0].match(numberedPattern);
-      if (matches && matches.length > 1) {
-        console.log('[AIOrchestrationService] Split by numbered patterns', { matchCount: matches.length });
-        lines = matches;
-      }
-    }
-    
-    console.log('[AIOrchestrationService] Processing lines', { lineCount: lines.length, lines });
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      // Match patterns like "1. ", "1)", "- ", "* ", "• ", etc.
-      // More flexible: match number/bullet, optional punctuation, then text
-      const match = line.match(/^[\d\-\*•]\s*[\.\)]?\s*(.+)/) || line.match(/^[\d\-\*•]\s+(.+)/);
-      console.log('[AIOrchestrationService] Processing line', { line, match: match ? match[1] : 'no match' });
-      if (match && match[1]) {
-        const label = match[1].trim();
-        // Determine type based on content
-        let type = 'suggest';
-        if (label.toLowerCase().includes('question') || label.toLowerCase().includes('ask')) {
-          type = 'question';
-        } else if (label.toLowerCase().includes('define') || label.toLowerCase().includes('explain')) {
-          type = 'define';
+    // Helper function to parse numbered list (strict format: "1. text")
+    const parseNumberedList = (text, defaultType = 'suggest') => {
+      if (!text || !text.trim()) return [];
+      const items = [];
+      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      
+      for (const line of lines) {
+        // Match strict format: number followed by ". " then text
+        const match = line.match(/^\d+\.\s+(.+)$/);
+        if (match && match[1]) {
+          const label = match[1].trim();
+          if (label.length > 0) {
+            items.push({
+              id: `${defaultType}-${items.length}`,
+              type: defaultType,
+              label,
+              icon: defaultType === 'action' ? 'lightbulb' : 'lightbulb',
+            });
+          }
         }
-
-        console.log('[AIOrchestrationService] Creating suggestion', { id: `suggestion-${i}`, type, label, icon: type === 'question' ? 'help-circle' : type === 'define' ? 'book' : 'lightbulb' });
-        suggestions.push({
-          id: `suggestion-${i}`,
-          type,
-          label,
-          icon: type === 'question' ? 'help-circle' : type === 'define' ? 'book' : 'lightbulb',
-        });
       }
+      
+      return items;
+    };
+    
+    // Parse talking points (type: 'suggest' for talking points) - limit to exactly 3
+    const talkingPoints = parseNumberedList(talkingPointsText, 'suggest').slice(0, 3);
+    console.log('[AIOrchestrationService] Parsed talking points', { count: talkingPoints.length, items: talkingPoints });
+    
+    // Parse follow-up actions (type: 'action' for follow-up actions) - limit to exactly 3
+    const followUpActions = parseNumberedList(actionsText, 'action').slice(0, 3);
+    console.log('[AIOrchestrationService] Parsed follow-up actions', { count: followUpActions.length, items: followUpActions });
+    
+    // Combine all suggestions (talking points + actions)
+    suggestions.push(...talkingPoints, ...followUpActions);
+
+    // Validation: Log warnings if we didn't get expected counts
+    if (!insights || !insights.bullets || insights.bullets.length < 3) {
+      console.warn('[AIOrchestrationService] Warning: Expected 3 insights, got', insights?.bullets?.length || 0);
+    }
+    if (talkingPoints.length < 3) {
+      console.warn('[AIOrchestrationService] Warning: Expected 3 talking points, got', talkingPoints.length);
+    }
+    if (followUpActions.length < 3) {
+      console.warn('[AIOrchestrationService] Warning: Expected 3 follow-up actions, got', followUpActions.length);
     }
 
-    // Ensure we have at least some suggestions
-    if (suggestions.length === 0) {
+    // Fallback: Only add fallback if we have absolutely nothing
+    if (suggestions.length === 0 && (!insights || !insights.bullets || insights.bullets.length === 0)) {
+      console.warn('[AIOrchestrationService] No valid data extracted, adding fallback');
       suggestions.push({
         id: 'suggestion-fallback',
         type: 'suggest',

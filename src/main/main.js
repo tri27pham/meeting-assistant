@@ -138,8 +138,8 @@ function createOverlayWindow() {
 
   if (isDev) {
     overlayWindow.loadURL("http://localhost:3000");
-    // Open DevTools in development (but it might not be interactive due to click-through)
-    overlayWindow.webContents.openDevTools();
+    // DevTools can be opened manually with Cmd+Option+I or via menu if needed
+    // overlayWindow.webContents.openDevTools();
   } else {
     overlayWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
   }
