@@ -20,11 +20,12 @@ const PANEL_IDS = [
 ];
 
 const PANEL_SIZES = {
-  liveInsights: { width: 420, height: 400 },
-  talkingPoints: { width: 420, height: 300 },
-  actions: { width: 420, height: 350 }, // Same width as liveInsights
-  transcript: { width: 380, height: 350 },
+  liveInsights: { width: 400, height: 250 },
+  talkingPoints: { width: 450, height: 280 },
+  actions: { width: 450, height: 250 }, 
+  transcript: { width: 400, height: 200 },
   audioMeter: { width: 320, height: 200 },
+  settings: { width: 450, height: 200 },
 };
 
 function App() {
@@ -87,8 +88,12 @@ function App() {
         y: 16,
       },
       settings: {
-        x: screenWidth - 400 - margin - containerPadding,
-        y: topOffset + PANEL_SIZES.actions.height + 16,
+        x:
+          screenWidth -
+          PANEL_SIZES.actions.width -
+          margin -
+          containerPadding,
+        y: topOffset + PANEL_SIZES.talkingPoints.height + 24 + PANEL_SIZES.actions.height + 24, // Position below actions panel with spacing
       },
     };
   }, [layoutKey]);
@@ -184,11 +189,6 @@ function App() {
 
     const unsubInsights = window.cluely.on.insightsUpdate((newInsights) => {
       setInsights(newInsights);
-    });
-
-    const unsubTrigger = window.cluely.on.triggerAISuggestion(() => {
-      // AI suggestions are now handled automatically via context service
-      // No manual trigger needed
     });
 
     const unsubResetLayout = window.cluely.on?.resetLayout?.(() => {
@@ -301,7 +301,6 @@ function App() {
       if (unsubAudioLevels) unsubAudioLevels();
       unsubSuggestion?.();
       unsubInsights?.();
-      unsubTrigger?.();
       unsubResetLayout?.();
       unsubToggleTranscript?.();
       unsubAIResponse?.();
@@ -375,7 +374,15 @@ function App() {
   const handleCopyInsights = useCallback(() => {}, []);
 
   const handleToggleSettings = useCallback(() => {
-    setShowSettings((prev) => !prev);
+    setShowSettings((prev) => {
+      const willShow = !prev;
+      if (willShow) {
+        // Clear saved size and position so panel uses default when opened
+        localStorage.removeItem('cluely-panel-size-settings');
+        localStorage.removeItem('cluely-panel-pos-settings');
+      }
+      return willShow;
+    });
   }, []);
 
   const handleCloseSettings = useCallback(() => {
@@ -433,8 +440,8 @@ function App() {
         panelId="live-insights"
         initialPosition={defaultPositions.liveInsights}
         initialSize={PANEL_SIZES.liveInsights}
-        minSize={{ width: 320, height: 300 }}
-        maxSize={{ width: 600, height: 700 }}
+        minSize={{ width: 280, height: 200 }}
+        maxSize={{ width: 500, height: 500 }}
         resizable={true}
       >
         <LiveInsightsPanel
@@ -448,8 +455,8 @@ function App() {
         panelId="talking-points"
         initialPosition={defaultPositions.talkingPoints}
         initialSize={PANEL_SIZES.talkingPoints}
-        minSize={{ width: 320, height: 200 }}
-        maxSize={{ width: 600, height: 500 }}
+        minSize={{ width: 280, height: 150 }}
+        maxSize={{ width: 500, height: 400 }}
         resizable={true}
       >
         <TalkingPointsPanel
@@ -462,8 +469,8 @@ function App() {
         panelId="actions"
         initialPosition={defaultPositions.actions}
         initialSize={PANEL_SIZES.actions}
-        minSize={{ width: 320, height: 250 }}
-        maxSize={{ width: 600, height: 600 }}
+        minSize={{ width: 320, height: 180 }}
+        maxSize={{ width: 700, height: 450 }}
         resizable={true}
       >
         <ActionsPanel
@@ -506,7 +513,7 @@ function App() {
           key={`settings-${layoutKey}`}
           panelId="settings"
           initialPosition={defaultPositions.settings}
-          initialSize={{ width: 400, height: 350 }}
+          initialSize={PANEL_SIZES.settings}
           minSize={{ width: 320, height: 280 }}
           maxSize={{ width: 600, height: 700 }}
           resizable={true}

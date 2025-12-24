@@ -3,7 +3,6 @@ import {
   BookIcon,
   GlobeIcon,
   ChatIcon,
-  SparkleIcon,
   LightbulbIcon,
   HelpCircleIcon,
 } from "./Icons";
@@ -37,8 +36,8 @@ function ActionsPanel({
       {/* Header */}
       <div className="panel-header">
         <div className="panel-title">
-          <SparkleIcon className="title-icon" />
-          <span>Follow-up Actions</span>
+          <LightbulbIcon className="title-icon" />
+          <span>FOLLOW-UP ACTIONS</span>
         </div>
       </div>
 

@@ -100,12 +100,6 @@ function registerHotkeys() {
     }
   });
 
-  globalShortcut.register("CommandOrControl+Return", () => {
-    if (overlayWindow) {
-      overlayWindow.webContents.send("ai:trigger-suggestion");
-    }
-  });
-
   globalShortcut.register("CommandOrControl+\\", () => {
     if (overlayWindow) {
       overlayWindow.webContents.send("layout:reset");
@@ -210,27 +204,27 @@ function setupAudioPipeline() {
       return;
     }
     
-    isReconnecting = true;
+      isReconnecting = true;
     reconnectAttempts++;
     
     // Exponential backoff: 1s, 2s, 4s, 8s, 16s
     const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 16000);
     console.log(`[Main] Attempting to reconnect to Deepgram (attempt ${reconnectAttempts}/${maxReconnectAttempts}) in ${delay}ms...`);
     
-    setTimeout(async () => {
-      try {
+      setTimeout(async () => {
+        try {
         // Ensure we disconnect any stale connection first
         if (deepgramService.isConnected) {
           await deepgramService.disconnect();
         }
         
-        await deepgramService.connect();
+          await deepgramService.connect();
         console.log("[Main] Successfully reconnected to Deepgram");
         reconnectAttempts = 0; // Reset on success
-        isReconnecting = false;
-      } catch (error) {
+          isReconnecting = false;
+        } catch (error) {
         console.error(`[Main] Failed to reconnect to Deepgram (attempt ${reconnectAttempts}):`, error);
-        isReconnecting = false;
+          isReconnecting = false;
         // Will retry on next error/close event
       }
     }, delay);

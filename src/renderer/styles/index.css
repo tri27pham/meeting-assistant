@@ -206,9 +206,6 @@ body,
   will-change: transform;
 }
 
-.draggable-panel.is-active {
-  /* No visual change when dragging/resizing */
-}
 
 /* Centered panels - positioned at 50% from left */
 .draggable-panel.is-centered {
@@ -575,10 +572,10 @@ body,
 .live-insights-panel {
   width: 100%;
   height: 100%;
-  padding: var(--space-lg);
+  padding: var(--space-md) var(--space-lg);
   display: flex;
   flex-direction: column;
-  gap: var(--space-lg);
+  gap: var(--space-sm);
   overflow: hidden;
 }
 
@@ -643,7 +640,7 @@ body,
 }
 
 .settings-section:not(:last-child) {
-  margin-bottom: var(--space-xs);
+  margin-bottom: 0;
 }
 
 .settings-section-header {
@@ -652,11 +649,12 @@ body,
   justify-content: space-between;
   gap: var(--space-sm);
   width: 100%;
-  padding: var(--space-sm) 0 var(--space-xs) 0;
+  padding: 4px 0 4px 0;
   background: none;
   border: none;
   cursor: pointer;
   transition: opacity 0.2s ease;
+  min-height: 44px;
 }
 
 .settings-section-header:hover {
@@ -739,12 +737,12 @@ body,
 .hotkeys-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2xl);
+  gap: var(--space-sm);
   overflow: hidden;
   transition: max-height 0.3s ease, opacity 0.2s ease;
   max-height: 500px;
   opacity: 1;
-  padding-top: var(--space-xs);
+  padding-top: var(--space-sm);
   margin-top: 0;
 }
 
@@ -761,7 +759,6 @@ body,
   justify-content: space-between;
   gap: var(--space-lg);
   padding: var(--space-sm) var(--space-md);
-  margin-bottom: var(--space-xs);
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 8px;
@@ -838,6 +835,8 @@ body,
 }
 
 .panel-title {
+  text-transform: uppercase;
+  opacity: 0.7;
   display: flex;
   align-items: center;
   gap: var(--space-sm);
@@ -847,8 +846,11 @@ body,
 }
 
 .title-icon {
-  color: var(--accent-purple);
-  opacity: 0.9;
+  color: var(--text-tertiary);
+  opacity: 0.8;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
 .panel-actions {
@@ -893,7 +895,7 @@ body,
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  padding: var(--space-lg);
+  padding: var(--space-md) var(--space-lg) var(--space-md) var(--space-lg);
 }
 
 .insights-bullets {
@@ -902,14 +904,14 @@ body,
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
+  gap: var(--space-sm);
 }
 
 .insights-bullet-item {
   position: relative;
   padding-left: var(--space-xl);
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
   word-wrap: break-word;
 }
@@ -1052,7 +1054,7 @@ body,
 }
 
 .talking-point-label {
-  font-size: 0.875rem;
+  font-size: 14px;
   color: var(--text-primary);
   line-height: 1.5;
   flex: 1;

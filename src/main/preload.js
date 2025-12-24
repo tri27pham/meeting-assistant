@@ -66,11 +66,6 @@ contextBridge.exposeInMainWorld("cluely", {
       return () => ipcRenderer.removeAllListeners("insights:update");
     },
 
-    // Manual trigger from hotkey
-    triggerAISuggestion: (callback) => {
-      ipcRenderer.on("ai:trigger-suggestion", () => callback());
-      return () => ipcRenderer.removeAllListeners("ai:trigger-suggestion");
-    },
 
     // Reset layout trigger from hotkey
     resetLayout: (callback) => {

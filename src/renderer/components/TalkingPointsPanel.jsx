@@ -1,7 +1,7 @@
 import React from "react";
 import {
-  SparkleIcon,
   LightbulbIcon,
+  ChatIcon,
 } from "./Icons";
 
 function TalkingPointsPanel({
@@ -12,8 +12,8 @@ function TalkingPointsPanel({
       {/* Header */}
       <div className="panel-header">
         <div className="panel-title">
-          <SparkleIcon className="title-icon" />
-          <span>Suggested Talking Points</span>
+          <ChatIcon className="title-icon" />
+          <span>SUGGESTED TALKING POINTS</span>
         </div>
       </div>
 
