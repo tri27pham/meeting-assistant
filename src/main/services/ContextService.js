@@ -7,6 +7,13 @@ class ContextService extends EventEmitter {
     this.summarizedHistory = []; // Older segments, summarized
     this.maxRecentSegments = 3; // Keep last 3 segments verbatim
     this.currentTopic = null;
+    
+    // Periodic emission settings
+    this.periodicIntervalMs = 5000; // Emit every 5 seconds
+    this.periodicTimer = null;
+    this.lastEmissionTime = null;
+    this.minSegmentsForEmission = 2; // Minimum segments before emitting
+    this.pendingSnapshot = null; // Store snapshot for periodic emission
   }
 
   addSegment(segment) {
@@ -31,7 +38,7 @@ class ContextService extends EventEmitter {
 
       if (topicChanged) {
         this.currentTopic = this._extractTopic(segment);
-        // Emit special event for topic change
+        // Emit special event for topic change (immediate)
         const snapshot = this.getSnapshot();
         console.log('[ContextService] Emitting context:topic-changed', { previousTopic, newTopic: this.currentTopic });
         this.emit('context:topic-changed', {
@@ -39,12 +46,17 @@ class ContextService extends EventEmitter {
           previousTopic,
           newTopic: this.currentTopic,
         });
+        // Reset periodic timer on topic change
+        this._resetPeriodicTimer();
+      } else {
+        // Store snapshot for periodic emission (don't emit immediately)
+        this.pendingSnapshot = this.getSnapshot();
+        
+        // Start periodic timer if not already running
+        if (!this.periodicTimer) {
+          this._startPeriodicTimer();
+        }
       }
-
-      // Always emit snapshot (for regular updates)
-      const snapshot = this.getSnapshot();
-      console.log('[ContextService] Emitting context:snapshot', { recentCount: snapshot.metadata.recentCount, historyCount: snapshot.metadata.historySummaryCount });
-      this.emit('context:snapshot', snapshot);
     } catch (error) {
       console.error('[ContextService] Error adding segment:', error);
       this.emit('error', error);
@@ -119,7 +131,59 @@ class ContextService extends EventEmitter {
     this.recentVerbatim = [];
     this.summarizedHistory = [];
     this.currentTopic = null;
+    // Clear periodic timer
+    if (this.periodicTimer) {
+      clearTimeout(this.periodicTimer);
+      this.periodicTimer = null;
+    }
+    this.pendingSnapshot = null;
+    this.lastEmissionTime = null;
     console.log('[ContextService] Context cleared');
+  }
+
+  _startPeriodicTimer() {
+    // Clear any existing timer
+    if (this.periodicTimer) {
+      clearTimeout(this.periodicTimer);
+    }
+
+    // Emit immediately if we have enough segments and enough time has passed
+    const now = Date.now();
+    const timeSinceLastEmission = this.lastEmissionTime ? now - this.lastEmissionTime : Infinity;
+    
+    if (this.pendingSnapshot && 
+        this.pendingSnapshot.metadata.recentCount >= this.minSegmentsForEmission &&
+        timeSinceLastEmission >= this.periodicIntervalMs) {
+      this._emitPeriodicSnapshot();
+    }
+
+    // Set up periodic emission
+    this.periodicTimer = setTimeout(() => {
+      this._emitPeriodicSnapshot();
+      // Continue periodic emissions
+      this._startPeriodicTimer();
+    }, this.periodicIntervalMs);
+  }
+
+  _resetPeriodicTimer() {
+    if (this.periodicTimer) {
+      clearTimeout(this.periodicTimer);
+      this.periodicTimer = null;
+    }
+    this.lastEmissionTime = Date.now();
+  }
+
+  _emitPeriodicSnapshot() {
+    if (this.pendingSnapshot && 
+        this.pendingSnapshot.metadata.recentCount >= this.minSegmentsForEmission) {
+      console.log('[ContextService] Emitting periodic context:snapshot', { 
+        recentCount: this.pendingSnapshot.metadata.recentCount, 
+        historyCount: this.pendingSnapshot.metadata.historySummaryCount 
+      });
+      this.emit('context:snapshot', this.pendingSnapshot);
+      this.lastEmissionTime = Date.now();
+      this.pendingSnapshot = null; // Clear pending snapshot
+    }
   }
 
   _detectTopicChange(segment) {
