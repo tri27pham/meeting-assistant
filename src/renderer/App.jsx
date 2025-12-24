@@ -94,11 +94,7 @@ function App() {
   }, [layoutKey]);
   
   // Start with empty insights - will be populated by AI responses
-  const [insights, setInsights] = useState({
-    title: null,
-    summary: null,
-    context: null,
-  });
+  const [insights, setInsights] = useState(null);
 
   // Talking points for Live Insights Panel (suggested things to say)
   const [talkingPoints, setTalkingPoints] = useState([]);
@@ -215,11 +211,7 @@ function App() {
         if ((data.actionType === 'suggestion' || data.actionType === 'suggest')) {
           // Update insights if provided
           if (data.insights && !data.isPartial) {
-            setInsights({
-              title: data.insights.title || null,
-              summary: data.insights.summary || null,
-              context: null, // Can be used for additional context if needed
-            });
+            setInsights(data.insights);
           }
 
           // Separate talking points (general suggestions) from actions (define, get questions, etc.)

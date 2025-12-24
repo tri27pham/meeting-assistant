@@ -187,7 +187,7 @@ class AIOrchestrationService extends EventEmitter {
 Your task:
 1. Interpret the transcript in context - make educated guesses about what was likely said based on context
 2. Correct common transcription errors by understanding the intended meaning
-3. Generate LIVE INSIGHTS: Provide a brief summary (2-3 sentences) about the current topic being discussed, including relevant context that would help the user understand the conversation better
+3. Generate LIVE INSIGHTS: Provide 2-3 bullet points (STRICTLY 30 words total maximum) that are short, concise, and provide deeper context about the current topic. Each bullet should be 8-12 words maximum. Focus on key insights that help the user understand the topic better.
 4. Generate 3 VERY CONCISE talking points (max 10 words each) that would be helpful for the speaker to continue or enhance the conversation
 
 Recent conversation transcript (may contain minor errors):
@@ -203,14 +203,19 @@ Instructions:
 - Make suggestions that are relevant to what was ACTUALLY being discussed (not the raw transcription errors)
 
 OUTPUT FORMAT:
-Start with "INSIGHTS:" followed by a brief 2-3 sentence summary providing context about the current topic. This should help the user understand what's being discussed and provide relevant background information.
+Start with "INSIGHTS:" followed by 2-3 bullet points (STRICTLY 30 words total maximum). Each bullet should be 8-12 words maximum. Be concise and focus on key insights that provide deeper context. Use bullet format with "- " prefix.
 
 Then provide "SUGGESTIONS:" followed by a numbered list of:
 - Talking points: Phrase as conversational statements/questions the user can READ DIRECTLY from the screen and say in the conversation (with minimal changes). These should sound natural and fit right into the conversation flow. Examples: "What about the implementation details?" or "How does this compare to alternatives?"
 - Follow-up actions: Phrase as explicit actions the user can take. Examples: "Define neural networks" or "Get more info on pricing"
 
 Example format:
-INSIGHTS: The conversation is about machine learning models. Neural networks are being discussed, specifically their architecture and training process. The user seems interested in understanding how these models learn from data.
+INSIGHTS:
+- Neural networks use layered architectures to process data
+- Training adjusts weights iteratively to improve accuracy
+- Performance depends on data quality and network depth
+
+SUGGESTIONS:
 
 SUGGESTIONS:
 1. What about the implementation details?
@@ -312,21 +317,33 @@ SUGGESTIONS:
     let insights = null;
     const suggestions = [];
     
-    // Extract insights section
+    // Extract insights section - now expects bullet points
     const insightsMatch = response.match(/INSIGHTS:\s*(.+?)(?=SUGGESTIONS:|$)/is);
     if (insightsMatch && insightsMatch[1]) {
       const insightsText = insightsMatch[1].trim();
-      // Extract title (first sentence or phrase) and summary (rest)
-      const sentences = insightsText.split(/[.!?]+/).filter(s => s.trim());
-      if (sentences.length > 0) {
+      // Extract bullet points (lines starting with "- ", "• ", "* ", or numbered)
+      const lines = insightsText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      const bullets = [];
+      
+      for (const line of lines) {
+        // Match bullet points: "- text", "• text", "* text", or "1. text"
+        const bulletMatch = line.match(/^[-\*•]\s*(.+)$/) || line.match(/^\d+[\.\)]\s*(.+)$/);
+        if (bulletMatch) {
+          bullets.push(bulletMatch[1].trim());
+        } else if (line && !line.match(/^(INSIGHTS|SUGGESTIONS):/i)) {
+          // If no bullet prefix, treat the line as a bullet point
+          bullets.push(line);
+        }
+      }
+      
+      if (bullets.length > 0) {
         insights = {
-          title: sentences[0].trim(),
-          summary: sentences.slice(1).join('. ').trim() || insightsText.trim(),
+          bullets: bullets,
         };
       } else {
+        // Fallback: if no bullets found, use the text as-is
         insights = {
-          title: null,
-          summary: insightsText.trim(),
+          bullets: [insightsText],
         };
       }
       console.log('[AIOrchestrationService] Extracted insights', insights);

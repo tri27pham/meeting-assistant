@@ -124,6 +124,13 @@ function setupAudioPipeline() {
   let chunkCount = 0;
   audioCaptureService.on("audioChunk", (chunk) => {
     chunkCount++;
+    
+    // Only send audio to Deepgram when actively recording (not stopped or paused)
+    if (!audioCaptureService.isCapturing || audioCaptureService.isPaused) {
+      // Silently ignore chunks when not recording or paused
+      return;
+    }
+    
     if (deepgramService.isConnected) {
       if (!firstChunkSent) {
         console.log("[Main] First audio chunk being sent to Deepgram");
@@ -133,14 +140,18 @@ function setupAudioPipeline() {
       if (chunkCount % 100 === 0) {
         console.log(`[Main] Sent ${chunkCount} audio chunks to Deepgram, connection state:`, {
           isConnected: deepgramService.isConnected,
-          isStreaming: deepgramService.isStreaming
+          isStreaming: deepgramService.isStreaming,
+          isCapturing: audioCaptureService.isCapturing,
+          isPaused: audioCaptureService.isPaused
         });
       }
       deepgramService.streamAudio(chunk);
     } else {
       console.warn("[Main] Audio chunk received but Deepgram is not connected", {
         chunkCount,
-        isConnected: deepgramService.isConnected
+        isConnected: deepgramService.isConnected,
+        isCapturing: audioCaptureService.isCapturing,
+        isPaused: audioCaptureService.isPaused
       });
     }
   });

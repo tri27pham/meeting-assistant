@@ -11,7 +11,7 @@ function LiveInsightsPanel({
 }) {
 
   const handleCopy = () => {
-    const text = `${insights.title}\n\n${insights.summary}${insights.context ? "\n\n" + insights.context : ""}`;
+    const text = insights.bullets ? insights.bullets.join('\n') : (insights.title || '') + (insights.summary || '');
     navigator.clipboard.writeText(text);
     onCopyInsights?.();
   };
@@ -35,14 +35,22 @@ function LiveInsightsPanel({
         </div>
       </div>
 
-          {/* Summary or relevant recent points */}
-          {(insights.title || insights.summary || insights.context) ? (
+          {/* Bullet-pointed insights */}
+          {insights && insights.bullets && insights.bullets.length > 0 ? (
+            <div className="insights-content">
+              <ul className="insights-bullets">
+                {insights.bullets.map((bullet, index) => (
+                  <li key={index} className="insights-bullet-item">
+                    {bullet}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (insights && (insights.title || insights.summary)) ? (
+            // Fallback for old format
             <div className="insights-content">
               {insights.title && <h3 className="insights-title">{insights.title}</h3>}
               {insights.summary && <p className="insights-summary">{insights.summary}</p>}
-              {insights.context && (
-                <p className="insights-context">{insights.context}</p>
-              )}
             </div>
           ) : (
             <div className="insights-content">
