@@ -34,6 +34,11 @@ contextBridge.exposeInMainWorld("cluely", {
     },
   },
 
+  // Console log forwarding (for debugging)
+  log: (level, message) => {
+    ipcRenderer.send("renderer:console-log", level, message);
+  },
+
   // Event listeners for backend → UI communication
   on: {
     // Receive transcript updates from backend

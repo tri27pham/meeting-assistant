@@ -119,32 +119,39 @@ function App() {
     mixed: 0,
   });
 
+  // Memoize callbacks to prevent hook from restarting unnecessarily
+  const handleMicError = useCallback((error) => {
+    console.error("[App] Microphone capture error:", error);
+    setIsStarting(false);
+  }, []);
+
+  const handleMicAudioLevel = useCallback((level) => {
+    setAudioLevels((prev) => ({
+      ...prev,
+      microphone: level,
+    }));
+  }, []);
+
+  const handleMicReady = useCallback(() => {
+    // Mic is capturing audio, everything is ready
+    try {
+      const readyTime = performance.now();
+      const startTime = sessionStartTimeRef.current || readyTime;
+      console.log(`[App] Microphone ready, total initialization: ${(readyTime - startTime).toFixed(2)}ms`);
+    } catch (e) {
+      console.log("[App] Microphone ready");
+    }
+    setIsStarting(false);
+    setShowTranscript(true);
+  }, []);
+
   // Microphone capture hook
   const microphoneCapture = useMicrophoneCapture({
     enabled: isRunning,
     paused: isPaused,
-    onError: (error) => {
-      console.error("[App] Microphone capture error:", error);
-      setIsStarting(false);
-    },
-    onAudioLevel: (level) => {
-      setAudioLevels((prev) => ({
-        ...prev,
-        microphone: level,
-      }));
-    },
-    onReady: () => {
-      // Mic is capturing audio, everything is ready
-      try {
-        const readyTime = performance.now();
-        const startTime = sessionStartTimeRef.current || readyTime;
-        console.log(`[App] Microphone ready, total initialization: ${(readyTime - startTime).toFixed(2)}ms`);
-      } catch (e) {
-        console.log("[App] Microphone ready");
-      }
-      setIsStarting(false);
-      setShowTranscript(true);
-    },
+    onError: handleMicError,
+    onAudioLevel: handleMicAudioLevel,
+    onReady: handleMicReady,
   });
 
   useEffect(() => {
@@ -338,25 +345,31 @@ function App() {
         console.log("[App] Starting session...");
         setIsStarting(true);
         
+        // CRITICAL: Start microphone capture IMMEDIATELY on user interaction
+        // This ensures AudioContext is unlocked with user gesture (required by browser autoplay policy)
+        console.log("[App] Enabling microphone capture immediately (user interaction)...");
+        setIsRunning(true); // Enable mic hook immediately to unlock AudioContext
+        setIsPaused(false);
+        
         const sessionStartTime = performance.now();
         const result = await window.cluely.session.start();
         const sessionEndTime = performance.now();
         console.log(`[App] session.start() took ${(sessionEndTime - sessionStartTime).toFixed(2)}ms`, result);
         
         if (result && result.success) {
-          setIsRunning(true);
-          setIsPaused(false);
           setSessionTime(0);
           setTranscript([]);
-          console.log("[App] Session started, waiting for microphone...");
+          console.log("[App] Session started, microphone should be initializing...");
           // Don't show transcript or hide spinner yet - wait for onReady callback from mic
         } else {
           console.error("[App] Failed to start session:", result?.error || "Unknown error");
           setIsStarting(false);
+          setIsRunning(false); // Disable if session start failed
         }
       } catch (error) {
         console.error("[App] Error starting session:", error);
         setIsStarting(false);
+        setIsRunning(false); // Disable if error
       }
     } else if (isPaused) {
       await window.cluely.session.togglePause();

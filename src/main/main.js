@@ -78,8 +78,68 @@ function createOverlayWindow() {
   overlayWindow.setAlwaysOnTop(true, "floating");
   overlayWindow.setIgnoreMouseEvents(true, { forward: true });
 
+  // Forward renderer console logs to main process terminal
+  overlayWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    const levelPrefix = level === 0 ? 'LOG' : level === 1 ? 'INFO' : level === 2 ? 'WARN' : 'ERROR';
+    console.log(`[Renderer:${levelPrefix}] ${message}${sourceId ? ` (${sourceId}:${line})` : ''}`);
+  });
+
+  // Inject console forwarding script after page loads
+  overlayWindow.webContents.once('did-finish-load', () => {
+    overlayWindow.webContents.executeJavaScript(`
+      (function() {
+        if (window.cluely && window.cluely.log) {
+          const originalLog = console.log;
+          const originalError = console.error;
+          const originalWarn = console.warn;
+          const originalInfo = console.info;
+          
+          const forwardLog = (level, args) => {
+            try {
+              const message = args.map(a => {
+                if (typeof a === 'object') {
+                  try {
+                    return JSON.stringify(a);
+                  } catch (e) {
+                    return String(a);
+                  }
+                }
+                return String(a);
+              }).join(' ');
+              window.cluely.log(level, message);
+            } catch (e) {
+              // Silently fail if IPC not available
+            }
+          };
+          
+          console.log = function(...args) {
+            originalLog.apply(console, args);
+            forwardLog('log', args);
+          };
+          
+          console.error = function(...args) {
+            originalError.apply(console, args);
+            forwardLog('error', args);
+          };
+          
+          console.warn = function(...args) {
+            originalWarn.apply(console, args);
+            forwardLog('warn', args);
+          };
+          
+          console.info = function(...args) {
+            originalInfo.apply(console, args);
+            forwardLog('log', args);
+          };
+        }
+      })();
+    `).catch(err => console.warn('[Main] Failed to inject console forwarding:', err));
+  });
+
   if (isDev) {
     overlayWindow.loadURL("http://localhost:3000");
+    // Open DevTools in development (but it might not be interactive due to click-through)
+    overlayWindow.webContents.openDevTools();
   } else {
     overlayWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
   }
@@ -310,6 +370,29 @@ function setupIPC() {
       startTime = Date.now();
     }
     
+      // Reset microphone chunk tracking
+      firstMicChunkTime = null;
+      micChunkCount = 0;
+      sessionStartTime = Date.now();
+      console.log(`[Main] Session start time recorded: ${new Date(sessionStartTime).toISOString()}`);
+      
+      // Set timeout warnings if no microphone chunks arrive
+      setTimeout(() => {
+        if (!firstMicChunkTime) {
+          console.warn(`[Main] ⚠️ WARNING: No microphone chunks received after 5 seconds!`);
+          console.warn(`[Main] This suggests the renderer process microphone capture may not be working.`);
+          console.warn(`[Main] Check browser console (DevTools) for renderer process logs.`);
+        }
+      }, 5000);
+      
+      setTimeout(() => {
+        if (!firstMicChunkTime) {
+          console.error(`[Main] ⚠️ CRITICAL: No microphone chunks received after 15 seconds!`);
+          console.error(`[Main] The microphone capture is likely not working.`);
+          console.error(`[Main] Check browser console (DevTools) for renderer process debugging logs.`);
+        }
+      }, 15000);
+    
     try {
       let permStartTime, permEndTime;
       try {
@@ -507,7 +590,44 @@ function setupIPC() {
   });
 
   // Audio capture - receive microphone chunks from renderer
+  let firstMicChunkTime = null;
+  let micChunkCount = 0;
+  let sessionStartTime = null;
+  
+  // Forward renderer console logs to terminal
+  ipcMain.on("renderer:console-log", (event, level, message) => {
+    const prefix = level === 'error' ? '[Renderer:ERROR]' : level === 'warn' ? '[Renderer:WARN]' : '[Renderer:LOG]';
+    if (level === 'error') {
+      console.error(`${prefix} ${message}`);
+    } else if (level === 'warn') {
+      console.warn(`${prefix} ${message}`);
+    } else {
+      console.log(`${prefix} ${message}`);
+    }
+  });
+
   ipcMain.on("audio:microphone-chunk", (event, chunkData) => {
+    micChunkCount++;
+    
+    // Track first chunk timing
+    if (!firstMicChunkTime) {
+      firstMicChunkTime = Date.now();
+      const timeSinceSessionStart = sessionStartTime ? firstMicChunkTime - sessionStartTime : 'unknown';
+      console.log(`[Main] 🎤 FIRST MICROPHONE CHUNK RECEIVED!`, {
+        timeSinceSessionStart: sessionStartTime ? `${timeSinceSessionStart}ms` : 'unknown',
+        timestamp: chunkData.timestamp,
+        sampleRate: chunkData.sampleRate,
+        dataLength: chunkData.data?.length,
+        chunkTimestamp: new Date(chunkData.timestamp).toISOString()
+      });
+    }
+    
+    // Log every 100 chunks to track flow
+    if (micChunkCount % 100 === 0) {
+      const timeSinceFirst = Date.now() - (firstMicChunkTime || Date.now());
+      console.log(`[Main] Microphone chunks received: ${micChunkCount} (${timeSinceFirst}ms since first)`);
+    }
+    
     audioCaptureService.onMicrophoneData(chunkData);
   });
 }
