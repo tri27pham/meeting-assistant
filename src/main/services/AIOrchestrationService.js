@@ -103,6 +103,13 @@ class AIOrchestrationService extends EventEmitter {
 
       // Build prompt
       const prompt = this.buildPrompt(actionType, contextForLLM);
+      
+      // If prompt is null, we don't have enough context yet
+      if (!prompt) {
+        console.log('[AIOrchestrationService] Not enough context to generate suggestions yet');
+        return;
+      }
+      
       console.log('[AIOrchestrationService] Built prompt', { promptLength: prompt.length });
 
       // Call LLM with streaming if available
@@ -182,7 +189,15 @@ class AIOrchestrationService extends EventEmitter {
     const { recentVerbatim, summarizedHistory, fullContext } = contextForLLM;
 
     if (actionType === 'suggestion') {
-      return `You are an AI assistant helping someone during a live conversation. The conversation transcript may contain minor transcription errors (e.g., "chat g b t" instead of "ChatGPT", "neural net" instead of "neural network", etc.).
+      // Check if we have meaningful context
+      const hasContext = recentVerbatim && recentVerbatim.trim().length > 0;
+      
+      if (!hasContext) {
+        // Don't generate suggestions if there's no context yet
+        return null;
+      }
+
+      return `You are an AI assistant helping someone during a live conversation. The conversation transcript may contain minor transcription errors (e.g., "chat g b t" instead of "ChatGPT", partial words, etc.).
 
 Your task:
 1. Interpret the transcript in context - make educated guesses about what was likely said based on context
@@ -191,9 +206,11 @@ Your task:
 4. Generate 3 VERY CONCISE talking points (max 10 words each) that would be helpful for the speaker to continue or enhance the conversation
 
 Recent conversation transcript (may contain minor errors):
-${recentVerbatim || 'No recent conversation'}
+${recentVerbatim}
 
 ${summarizedHistory ? `Previous context:\n${summarizedHistory}\n\n` : ''}
+
+CRITICAL: Base your insights and suggestions ONLY on what is actually discussed in the conversation transcript above. Do NOT use generic examples or topics not mentioned in the conversation.
 
 Instructions:
 - Use context clues to interpret unclear or incorrectly transcribed words
@@ -201,27 +218,25 @@ Instructions:
 - If you see partial words or unclear phrases, use the surrounding context to infer meaning
 - Generate suggestions that reflect the CORRECTED/INTERPRETED understanding of the conversation
 - Make suggestions that are relevant to what was ACTUALLY being discussed (not the raw transcription errors)
+- ONLY generate insights about topics actually mentioned in the conversation
 
 OUTPUT FORMAT:
 Start with "INSIGHTS:" followed by 2-3 bullet points (STRICTLY 30 words total maximum). Each bullet should be 8-12 words maximum. Be concise and focus on key insights that provide deeper context. Use bullet format with "- " prefix.
 
 Then provide "SUGGESTIONS:" followed by a numbered list of:
 - Talking points: Phrase as conversational statements/questions the user can READ DIRECTLY from the screen and say in the conversation (with minimal changes). These should sound natural and fit right into the conversation flow. Examples: "What about the implementation details?" or "How does this compare to alternatives?"
-- Follow-up actions: Phrase as explicit actions the user can take. Examples: "Define neural networks" or "Get more info on pricing"
+- Follow-up actions: Phrase as explicit actions the user can take. Examples: "Get more info on pricing" or "Ask about use cases"
 
-Example format:
+Example format (for a conversation about project management):
 INSIGHTS:
-- Neural networks use layered architectures to process data
-- Training adjusts weights iteratively to improve accuracy
-- Performance depends on data quality and network depth
+- Project timelines depend on team size and complexity
+- Budget constraints often impact feature scope
+- Stakeholder communication is critical for success
 
 SUGGESTIONS:
-
-SUGGESTIONS:
-1. What about the implementation details?
-2. Define neural networks
-3. How does this compare to alternatives?
-4. Get more info on training data`;
+1. What about the timeline?
+2. How does this affect the budget?
+3. Get more info on stakeholder requirements`;
     }
 
     // Other action types can be added here
