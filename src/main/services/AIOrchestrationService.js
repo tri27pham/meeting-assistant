@@ -151,11 +151,13 @@ class AIOrchestrationService extends EventEmitter {
       // Emit complete response
       console.log('[AIOrchestrationService] Processing complete response', { responseLength: fullResponse.length });
       console.log('[AIOrchestrationService] Full response text:', fullResponse);
-      const completeSuggestions = this.processResponse(fullResponse, actionType);
+      const { insights, suggestions: completeSuggestions } = this.processResponse(fullResponse, actionType);
+      console.log('[AIOrchestrationService] Processed insights:', insights);
       console.log('[AIOrchestrationService] Processed suggestions:', JSON.stringify(completeSuggestions, null, 2));
-      console.log('[AIOrchestrationService] Emitting complete suggestions', { count: completeSuggestions.length });
+      console.log('[AIOrchestrationService] Emitting complete response', { insightsCount: insights ? 1 : 0, suggestionsCount: completeSuggestions.length });
       this.emit('ai:response', {
         actionType,
+        insights,
         suggestions: completeSuggestions,
         isPartial: false,
         timestamp: Date.now(),
@@ -185,7 +187,8 @@ class AIOrchestrationService extends EventEmitter {
 Your task:
 1. Interpret the transcript in context - make educated guesses about what was likely said based on context
 2. Correct common transcription errors by understanding the intended meaning
-3. Generate 3 VERY CONCISE talking points (max 10 words each) that would be helpful for the speaker to continue or enhance the conversation
+3. Generate LIVE INSIGHTS: Provide a brief summary (2-3 sentences) about the current topic being discussed, including relevant context that would help the user understand the conversation better
+4. Generate 3 VERY CONCISE talking points (max 10 words each) that would be helpful for the speaker to continue or enhance the conversation
 
 Recent conversation transcript (may contain minor errors):
 ${recentVerbatim || 'No recent conversation'}
@@ -199,20 +202,21 @@ Instructions:
 - Generate suggestions that reflect the CORRECTED/INTERPRETED understanding of the conversation
 - Make suggestions that are relevant to what was ACTUALLY being discussed (not the raw transcription errors)
 
-CRITICAL FORMATTING:
-- Talking points: Phrase as conversational statements/questions the user can READ DIRECTLY from the screen and say in the conversation (with minimal changes). These should sound natural and fit right into the conversation flow. Examples: "What about the implementation details?" or "How does this compare to alternatives?" or "That's interesting - tell me more about the pricing model."
-- Follow-up actions: Phrase as explicit actions the user can take. Examples: "Define neural networks" or "Get more info on pricing" or "Ask follow-up questions about use cases"
+OUTPUT FORMAT:
+Start with "INSIGHTS:" followed by a brief 2-3 sentence summary providing context about the current topic. This should help the user understand what's being discussed and provide relevant background information.
 
-Generate a mix of:
-1. Talking points (conversational phrases the user can read directly - natural questions or statements)
-2. Follow-up actions (explicit actions like "define X", "get info about Y", "ask about Z")
+Then provide "SUGGESTIONS:" followed by a numbered list of:
+- Talking points: Phrase as conversational statements/questions the user can READ DIRECTLY from the screen and say in the conversation (with minimal changes). These should sound natural and fit right into the conversation flow. Examples: "What about the implementation details?" or "How does this compare to alternatives?"
+- Follow-up actions: Phrase as explicit actions the user can take. Examples: "Define neural networks" or "Get more info on pricing"
 
-Format as a numbered list. Examples:
+Example format:
+INSIGHTS: The conversation is about machine learning models. Neural networks are being discussed, specifically their architecture and training process. The user seems interested in understanding how these models learn from data.
+
+SUGGESTIONS:
 1. What about the implementation details?
 2. Define neural networks
 3. How does this compare to alternatives?
-4. Get more info on pricing
-5. That's interesting - tell me more about that`;
+4. Get more info on training data`;
     }
 
     // Other action types can be added here
@@ -302,13 +306,38 @@ Format as a numbered list. Examples:
   }
 
   processResponse(response, actionType) {
-    // Format LLM response as action items for UI
+    // Format LLM response as insights and action items for UI
     console.log('[AIOrchestrationService] processResponse called', { responseLength: response.length, responsePreview: response.substring(0, 200) });
     
+    let insights = null;
     const suggestions = [];
     
+    // Extract insights section
+    const insightsMatch = response.match(/INSIGHTS:\s*(.+?)(?=SUGGESTIONS:|$)/is);
+    if (insightsMatch && insightsMatch[1]) {
+      const insightsText = insightsMatch[1].trim();
+      // Extract title (first sentence or phrase) and summary (rest)
+      const sentences = insightsText.split(/[.!?]+/).filter(s => s.trim());
+      if (sentences.length > 0) {
+        insights = {
+          title: sentences[0].trim(),
+          summary: sentences.slice(1).join('. ').trim() || insightsText.trim(),
+        };
+      } else {
+        insights = {
+          title: null,
+          summary: insightsText.trim(),
+        };
+      }
+      console.log('[AIOrchestrationService] Extracted insights', insights);
+    }
+    
+    // Extract suggestions section
+    const suggestionsMatch = response.match(/SUGGESTIONS:\s*(.+)/is);
+    const suggestionsText = suggestionsMatch ? suggestionsMatch[1] : response;
+    
     // First try splitting by newlines
-    let lines = response.split('\n').filter((l) => l.trim());
+    let lines = suggestionsText.split('\n').filter((l) => l.trim());
     
     // If we only have one line, try splitting by numbered patterns (e.g., "1. ...2. ...3. ...")
     if (lines.length === 1) {
@@ -361,7 +390,7 @@ Format as a numbered list. Examples:
       });
     }
 
-    return suggestions;
+    return { insights, suggestions };
   }
 }
 

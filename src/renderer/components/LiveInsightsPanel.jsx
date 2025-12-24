@@ -7,7 +7,6 @@ import {
 
 function LiveInsightsPanel({
   insights,
-  talkingPoints,
   onCopyInsights,
 }) {
 
@@ -52,25 +51,6 @@ function LiveInsightsPanel({
               </div>
             </div>
           )}
-
-          {/* Suggested talking points */}
-          <div className="talking-points-section">
-            <h4 className="talking-points-title">Suggested Talking Points</h4>
-            {talkingPoints && talkingPoints.length > 0 ? (
-              <div className="talking-points-list">
-                {talkingPoints.map((point) => (
-                  <div key={point.id} className="talking-point-item">
-                    <LightbulbIcon className="talking-point-icon" />
-                    <span className="talking-point-label">{point.label || point.text || 'Untitled'}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="talking-points-empty">
-                <p>No talking points yet. Keep talking to generate suggestions.</p>
-              </div>
-            )}
-          </div>
     </div>
   );
 }

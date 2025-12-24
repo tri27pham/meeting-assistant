@@ -955,6 +955,28 @@ body,
 }
 
 /* Talking Points Section */
+.talking-points-panel {
+  width: 100%;
+  height: 100%;
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  overflow: hidden;
+}
+
+.talking-points-panel .panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: var(--space-sm);
+}
+
+.talking-points-panel .talking-points-section {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
 .talking-points-section {
   margin-top: var(--space-lg);
   padding-top: var(--space-lg);

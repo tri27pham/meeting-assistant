@@ -11,7 +11,7 @@ const audioConfig = {
     punctuate: true,
     diarize: false,
     smartFormat: true,
-    endpointing: 500, // Increased from 100ms to 500ms - gives more time before finalizing, reducing cut-off errors
+    endpointing: 300, // Balance between responsiveness and accuracy
     filler_words: true, // Include filler words for better context
     multichannel: false,
     alternatives: 1, // Get alternative transcriptions for better accuracy

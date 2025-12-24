@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import ControlBar from "./components/ControlBar";
 import LiveInsightsPanel from "./components/LiveInsightsPanel";
+import TalkingPointsPanel from "./components/TalkingPointsPanel";
 import ActionsPanel from "./components/ActionsPanel";
 import TranscriptPanel from "./components/TranscriptPanel";
 import SettingsPanel from "./components/SettingsPanel";
@@ -11,6 +12,7 @@ import useMicrophoneCapture from "./hooks/useMicrophoneCapture";
 const PANEL_IDS = [
   "control-bar",
   "live-insights",
+  "talking-points",
   "actions",
   "transcript",
   "settings",
@@ -19,6 +21,7 @@ const PANEL_IDS = [
 
 const PANEL_SIZES = {
   liveInsights: { width: 420, height: 400 },
+  talkingPoints: { width: 420, height: 300 },
   actions: { width: 420, height: 350 }, // Same width as liveInsights
   transcript: { width: 380, height: 350 },
   audioMeter: { width: 320, height: 200 },
@@ -59,13 +62,21 @@ function App() {
         x: margin - containerPadding,
         y: topOffset,
       },
+      talkingPoints: {
+        x:
+          screenWidth -
+          PANEL_SIZES.talkingPoints.width -
+          margin -
+          containerPadding,
+        y: topOffset,
+      },
       actions: {
         x:
           screenWidth -
           PANEL_SIZES.actions.width -
           margin -
           containerPadding,
-        y: topOffset,
+        y: topOffset + PANEL_SIZES.talkingPoints.height + 24, // Position below talking points with spacing
       },
       transcript: {
         x: margin - containerPadding,
@@ -201,8 +212,19 @@ function App() {
     if (window.cluely && window.cluely.on && window.cluely.on.aiResponse) {
       unsubAIResponse = window.cluely.on.aiResponse((data) => {
         // Accept 'suggestion' or 'suggest' action types (both are talking point suggestions)
-        if ((data.actionType === 'suggestion' || data.actionType === 'suggest') && data.suggestions) {
+        if ((data.actionType === 'suggestion' || data.actionType === 'suggest')) {
+          // Update insights if provided
+          if (data.insights && !data.isPartial) {
+            setInsights({
+              title: data.insights.title || null,
+              summary: data.insights.summary || null,
+              context: null, // Can be used for additional context if needed
+            });
+          }
+
           // Separate talking points (general suggestions) from actions (define, get questions, etc.)
+          if (!data.suggestions) return;
+          
           const newTalkingPoints = [];
           const newActions = [];
 
@@ -425,8 +447,21 @@ function App() {
       >
         <LiveInsightsPanel
           insights={insights}
-          talkingPoints={talkingPoints}
           onCopyInsights={handleCopyInsights}
+        />
+      </DraggablePanel>
+
+      <DraggablePanel
+        key={`talking-points-${layoutKey}`}
+        panelId="talking-points"
+        initialPosition={defaultPositions.talkingPoints}
+        initialSize={PANEL_SIZES.talkingPoints}
+        minSize={{ width: 320, height: 200 }}
+        maxSize={{ width: 600, height: 500 }}
+        resizable={true}
+      >
+        <TalkingPointsPanel
+          talkingPoints={talkingPoints}
         />
       </DraggablePanel>
 

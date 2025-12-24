@@ -121,15 +121,27 @@ function registerHotkeys() {
 
 function setupAudioPipeline() {
   let firstChunkSent = false;
+  let chunkCount = 0;
   audioCaptureService.on("audioChunk", (chunk) => {
+    chunkCount++;
     if (deepgramService.isConnected) {
       if (!firstChunkSent) {
         console.log("[Main] First audio chunk being sent to Deepgram");
         firstChunkSent = true;
       }
+      // Log every 100 chunks to track if audio is still flowing
+      if (chunkCount % 100 === 0) {
+        console.log(`[Main] Sent ${chunkCount} audio chunks to Deepgram, connection state:`, {
+          isConnected: deepgramService.isConnected,
+          isStreaming: deepgramService.isStreaming
+        });
+      }
       deepgramService.streamAudio(chunk);
     } else {
-      console.warn("[Main] Audio chunk received but Deepgram is not connected");
+      console.warn("[Main] Audio chunk received but Deepgram is not connected", {
+        chunkCount,
+        isConnected: deepgramService.isConnected
+      });
     }
   });
 
@@ -153,7 +165,6 @@ function setupAudioPipeline() {
     });
     
     // Forward to ContextService for context management
-    console.log('[Main] Forwarding transcript to ContextService');
     contextService.addSegment(transcriptData);
 
     // Keep existing transcript forwarding to renderer (for UI display)
@@ -168,24 +179,54 @@ function setupAudioPipeline() {
   });
 
   let isReconnecting = false;
-  deepgramService.on("closed", () => {
-    if (audioCaptureService.isCapturing && !isReconnecting) {
-      isReconnecting = true;
-      console.log("[Main] Deepgram connection closed, reconnecting in 2s...");
-      setTimeout(async () => {
-        try {
-          await deepgramService.connect();
-          isReconnecting = false;
-        } catch (error) {
-          console.error("[Main] Failed to reconnect to Deepgram:", error);
-          isReconnecting = false;
-        }
-      }, 2000);
-    } else if (!audioCaptureService.isCapturing) {
-      console.log("[Main] Deepgram connection closed, but audio capture is not active - not reconnecting");
-    } else {
-      console.log("[Main] Deepgram connection closed, but reconnection already in progress");
+  let reconnectAttempts = 0;
+  const maxReconnectAttempts = 5;
+  
+  const attemptReconnect = async () => {
+    if (!audioCaptureService.isCapturing) {
+      console.log("[Main] Audio capture not active - not reconnecting");
+      return;
     }
+    
+    if (isReconnecting) {
+      console.log("[Main] Reconnection already in progress");
+      return;
+    }
+    
+    if (reconnectAttempts >= maxReconnectAttempts) {
+      console.error("[Main] Max reconnection attempts reached, giving up");
+      reconnectAttempts = 0;
+      return;
+    }
+    
+    isReconnecting = true;
+    reconnectAttempts++;
+    
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 16000);
+    console.log(`[Main] Attempting to reconnect to Deepgram (attempt ${reconnectAttempts}/${maxReconnectAttempts}) in ${delay}ms...`);
+    
+    setTimeout(async () => {
+      try {
+        // Ensure we disconnect any stale connection first
+        if (deepgramService.isConnected) {
+          await deepgramService.disconnect();
+        }
+        
+        await deepgramService.connect();
+        console.log("[Main] Successfully reconnected to Deepgram");
+        reconnectAttempts = 0; // Reset on success
+        isReconnecting = false;
+      } catch (error) {
+        console.error(`[Main] Failed to reconnect to Deepgram (attempt ${reconnectAttempts}):`, error);
+        isReconnecting = false;
+        // Will retry on next error/close event
+      }
+    }, delay);
+  };
+  
+  deepgramService.on("closed", () => {
+    attemptReconnect();
   });
 
   audioCaptureService.on("started", () => {
@@ -240,6 +281,10 @@ function setupAudioPipeline() {
 
   deepgramService.on("error", (error) => {
     console.error("[Main] Deepgram error:", error);
+    // Attempt to reconnect on error (connection might be broken)
+    if (audioCaptureService.isCapturing) {
+      attemptReconnect();
+    }
   });
 
   audioCaptureService.on("audioLevels", (levels) => {
@@ -259,6 +304,7 @@ function setupIPC() {
       console.error("[Main] Error accessing performance:", e);
       startTime = Date.now();
     }
+    
     try {
       let permStartTime, permEndTime;
       try {
@@ -411,7 +457,7 @@ function setupIPC() {
         console.log(`       Type: ${suggestion.type || 'N/A'}, Icon: ${suggestion.icon || 'N/A'}`);
       });
     } else {
-      console.log('  ⚠️  No suggestions in response!');
+      console.log('  No suggestions in response!');
     }
     console.log('==================================\n');
     
