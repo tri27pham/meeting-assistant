@@ -1,11 +1,13 @@
 import React from "react";
 import {
   SparkleIcon,
+  CloseIcon,
 } from "./Icons";
 
 function LiveInsightsPanel({
   insights,
   onCopyInsights,
+  onClose,
 }) {
 
   return (
@@ -15,6 +17,15 @@ function LiveInsightsPanel({
         <div className="panel-title">
           <SparkleIcon className="title-icon" />
           <span>LIVE INSIGHTS</span>
+        </div>
+        <div className="panel-actions">
+          <button 
+            className="header-btn icon-only close-btn" 
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <CloseIcon />
+          </button>
         </div>
       </div>
 

@@ -5,12 +5,15 @@ import {
   ChatIcon,
   LightbulbIcon,
   HelpCircleIcon,
+  CloseIcon,
+  SparkleIcon,
 } from "./Icons";
 
 function ActionsPanel({
   actions,
   selectedAction,
   onActionSelect,
+  onClose,
 }) {
   const getActionIcon = (iconType) => {
     switch (iconType) {
@@ -38,6 +41,15 @@ function ActionsPanel({
         <div className="panel-title">
           <LightbulbIcon className="title-icon" />
           <span>FOLLOW-UP ACTIONS</span>
+        </div>
+        <div className="panel-actions">
+          <button 
+            className="header-btn icon-only close-btn" 
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <CloseIcon />
+          </button>
         </div>
       </div>
 

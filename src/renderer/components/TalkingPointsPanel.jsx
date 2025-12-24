@@ -2,10 +2,12 @@ import React from "react";
 import {
   LightbulbIcon,
   ChatIcon,
+  CloseIcon,
 } from "./Icons";
 
 function TalkingPointsPanel({
   talkingPoints,
+  onClose,
 }) {
   return (
     <div className="talking-points-panel glass-panel">
@@ -14,6 +16,15 @@ function TalkingPointsPanel({
         <div className="panel-title">
           <ChatIcon className="title-icon" />
           <span>SUGGESTED TALKING POINTS</span>
+        </div>
+        <div className="panel-actions">
+          <button 
+            className="header-btn icon-only close-btn" 
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <CloseIcon />
+          </button>
         </div>
       </div>
 

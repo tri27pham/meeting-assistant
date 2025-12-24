@@ -37,6 +37,9 @@ function App() {
 
   const [layoutKey, setLayoutKey] = useState(0);
 
+  const [showLiveInsights, setShowLiveInsights] = useState(true);
+  const [showTalkingPoints, setShowTalkingPoints] = useState(true);
+  const [showActions, setShowActions] = useState(true);
   const [showTranscript, setShowTranscript] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   
@@ -192,10 +195,23 @@ function App() {
     });
 
     const unsubResetLayout = window.cluely.on?.resetLayout?.(() => {
+      // Close settings panel if open
+      setShowSettings(false);
+      
+      // Restore live insights, talking points, and actions panels to default positions
+      setShowLiveInsights(true);
+      setShowTalkingPoints(true);
+      setShowActions(true);
+      
       PANEL_IDS.forEach((panelId) => {
         localStorage.removeItem(`cluely-panel-pos-${panelId}`);
         localStorage.removeItem(`cluely-panel-size-${panelId}`);
       });
+      
+      // Also reset audio meter panel
+      localStorage.removeItem(`cluely-panel-pos-audio-meter`);
+      localStorage.removeItem(`cluely-panel-size-audio-meter`);
+      
       setLayoutKey((prev) => prev + 1);
     });
 
@@ -389,12 +405,41 @@ function App() {
     setShowSettings(false);
   }, []);
 
+  const handleCloseLiveInsights = useCallback(() => {
+    setShowLiveInsights(false);
+  }, []);
+
+  const handleCloseTalkingPoints = useCallback(() => {
+    setShowTalkingPoints(false);
+  }, []);
+
+  const handleCloseActions = useCallback(() => {
+    setShowActions(false);
+  }, []);
+
+  const handleCloseTranscript = useCallback(() => {
+    setShowTranscript(false);
+  }, []);
+
+  const handleCloseAudioMeter = useCallback(() => {
+    setShowAudioMeter(false);
+    localStorage.setItem('cluely-show-audio-meter', 'false');
+  }, []);
+
   const handleToggleAudioMeter = useCallback((enabled) => {
     setShowAudioMeter(enabled);
     localStorage.setItem('cluely-show-audio-meter', enabled.toString());
   }, []);
 
   const handleResetLayout = useCallback(() => {
+    // Close settings panel if open
+    setShowSettings(false);
+    
+    // Restore live insights, talking points, and actions panels to default positions
+    setShowLiveInsights(true);
+    setShowTalkingPoints(true);
+    setShowActions(true);
+    
     PANEL_IDS.forEach((panelId) => {
       localStorage.removeItem(`cluely-panel-pos-${panelId}`);
       localStorage.removeItem(`cluely-panel-size-${panelId}`);
@@ -435,50 +480,59 @@ function App() {
         />
       </DraggablePanel>
       
-      <DraggablePanel
-        key={`live-insights-${layoutKey}`}
-        panelId="live-insights"
-        initialPosition={defaultPositions.liveInsights}
-        initialSize={PANEL_SIZES.liveInsights}
-        minSize={{ width: 280, height: 200 }}
-        maxSize={{ width: 500, height: 500 }}
-        resizable={true}
-      >
-        <LiveInsightsPanel
-          insights={insights}
-          onCopyInsights={handleCopyInsights}
-        />
-      </DraggablePanel>
+      {showLiveInsights && (
+        <DraggablePanel
+          key={`live-insights-${layoutKey}`}
+          panelId="live-insights"
+          initialPosition={defaultPositions.liveInsights}
+          initialSize={PANEL_SIZES.liveInsights}
+          minSize={{ width: 280, height: 200 }}
+          maxSize={{ width: 500, height: 500 }}
+          resizable={true}
+        >
+          <LiveInsightsPanel
+            insights={insights}
+            onCopyInsights={handleCopyInsights}
+            onClose={handleCloseLiveInsights}
+          />
+        </DraggablePanel>
+      )}
 
-      <DraggablePanel
-        key={`talking-points-${layoutKey}`}
-        panelId="talking-points"
-        initialPosition={defaultPositions.talkingPoints}
-        initialSize={PANEL_SIZES.talkingPoints}
-        minSize={{ width: 280, height: 150 }}
-        maxSize={{ width: 500, height: 400 }}
-        resizable={true}
-      >
-        <TalkingPointsPanel
-          talkingPoints={talkingPoints}
-        />
-      </DraggablePanel>
+      {showTalkingPoints && (
+        <DraggablePanel
+          key={`talking-points-${layoutKey}`}
+          panelId="talking-points"
+          initialPosition={defaultPositions.talkingPoints}
+          initialSize={PANEL_SIZES.talkingPoints}
+          minSize={{ width: 280, height: 150 }}
+          maxSize={{ width: 500, height: 400 }}
+          resizable={true}
+        >
+          <TalkingPointsPanel
+            talkingPoints={talkingPoints}
+            onClose={handleCloseTalkingPoints}
+          />
+        </DraggablePanel>
+      )}
 
-      <DraggablePanel
-        key={`actions-${layoutKey}`}
-        panelId="actions"
-        initialPosition={defaultPositions.actions}
-        initialSize={PANEL_SIZES.actions}
-        minSize={{ width: 320, height: 180 }}
-        maxSize={{ width: 700, height: 450 }}
-        resizable={true}
-      >
-        <ActionsPanel
-          actions={actions}
-          selectedAction={selectedAction}
-          onActionSelect={handleActionSelect}
-        />
-      </DraggablePanel>
+      {showActions && (
+        <DraggablePanel
+          key={`actions-${layoutKey}`}
+          panelId="actions"
+          initialPosition={defaultPositions.actions}
+          initialSize={PANEL_SIZES.actions}
+          minSize={{ width: 320, height: 180 }}
+          maxSize={{ width: 700, height: 450 }}
+          resizable={true}
+        >
+          <ActionsPanel
+            actions={actions}
+            selectedAction={selectedAction}
+            onActionSelect={handleActionSelect}
+            onClose={handleCloseActions}
+          />
+        </DraggablePanel>
+      )}
       
       {showTranscript && (
         <DraggablePanel
@@ -490,7 +544,7 @@ function App() {
           maxSize={{ width: 500, height: 600 }}
           resizable={true}
         >
-          <TranscriptPanel transcript={transcript} />
+          <TranscriptPanel transcript={transcript} onClose={handleCloseTranscript} />
         </DraggablePanel>
       )}
 
