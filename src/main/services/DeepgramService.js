@@ -4,8 +4,9 @@ const { performance } = require('perf_hooks');
 const audioConfig = require('../config/audioConfig');
 
 class DeepgramService extends EventEmitter {
-  constructor() {
+  constructor(source = null) {
     super();
+    this.source = source; // 'microphone' or 'system' - for identification
     this.deepgram = null;
     this.liveConnection = null;
     this.isConnected = false;
@@ -13,6 +14,7 @@ class DeepgramService extends EventEmitter {
     this.keepaliveInterval = null;
     this.healthCheckInterval = null;
     this.lastTranscriptTime = null;
+    this.streamStartTime = null; // Absolute timestamp when connection opens
 
     const apiKey = audioConfig.deepgram.apiKey;
     if (!apiKey) {
@@ -83,7 +85,9 @@ class DeepgramService extends EventEmitter {
           this.isConnected = true;
           this.isStreaming = false;
           this.lastTranscriptTime = Date.now();
-          this.emit('connected');
+          this.streamStartTime = Date.now(); // Record absolute start time for timestamp calculation
+          console.log(`[DeepgramService] Stream start time recorded: ${new Date(this.streamStartTime).toISOString()}${this.source ? ` (source: ${this.source})` : ''}`);
+          this.emit('connected', { streamStartTime: this.streamStartTime, source: this.source });
           console.log('[DeepgramService] Connected to Deepgram - connection is ready');
           this._startKeepalive();
           this._startHealthCheck();
@@ -124,6 +128,7 @@ class DeepgramService extends EventEmitter {
       this.liveConnection = null;
       this.isConnected = false;
       this.lastTranscriptTime = null;
+      this.streamStartTime = null;
 
       this.emit('disconnected');
       console.log('[DeepgramService] Disconnected from Deepgram');
@@ -362,17 +367,25 @@ class DeepgramService extends EventEmitter {
         };
 
         // Emit descriptive event names following service rules
+        // Include stream start time and source for timestamp calculation
+        const enrichedTranscriptData = {
+          ...transcriptData,
+          streamStartTime: this.streamStartTime,
+          source: this.source,
+        };
+
         if (isFinal) {
           this.lastTranscriptTime = Date.now();
           console.log('[DeepgramService] Emitting transcript:final', { 
             text: transcriptData.text.substring(0, 50),
             confidence: transcriptData.confidence,
-            connectionState: this.isConnected ? 'connected' : 'disconnected'
+            connectionState: this.isConnected ? 'connected' : 'disconnected',
+            source: this.source
           });
-          this.emit('transcript:final', transcriptData);
+          this.emit('transcript:final', enrichedTranscriptData);
         } else {
           this.lastTranscriptTime = Date.now();
-          this.emit('transcript:partial', transcriptData);
+          this.emit('transcript:partial', enrichedTranscriptData);
         }
       } else {
         // Log when we receive transcript events but no valid text

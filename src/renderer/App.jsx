@@ -8,6 +8,7 @@ import SettingsPanel from "./components/SettingsPanel";
 import AudioMeterPanel from "./components/AudioMeterPanel";
 import DraggablePanel from "./components/DraggablePanel";
 import useMicrophoneCapture from "./hooks/useMicrophoneCapture";
+import useSystemAudioCapture from "./hooks/useSystemAudioCapture";
 
 const PANEL_IDS = [
   "control-bar",
@@ -145,6 +146,27 @@ function App() {
     setShowTranscript(true);
   }, []);
 
+  // System audio callbacks
+  const handleSystemError = useCallback((error) => {
+    console.error("[App] System audio capture error:", error);
+    console.error("[App] Error details:", {
+      message: error.message,
+      stack: error.stack,
+      hasElectronAudioLoopback: !!window.electronAudioLoopback,
+    });
+  }, []);
+
+  const handleSystemAudioLevel = useCallback((level) => {
+    setAudioLevels((prev) => ({
+      ...prev,
+      system: level,
+    }));
+  }, []);
+
+  const handleSystemReady = useCallback(() => {
+    console.log("[App] System audio ready");
+  }, []);
+
   // Microphone capture hook
   const microphoneCapture = useMicrophoneCapture({
     enabled: isRunning,
@@ -152,6 +174,15 @@ function App() {
     onError: handleMicError,
     onAudioLevel: handleMicAudioLevel,
     onReady: handleMicReady,
+  });
+
+  // System audio capture hook
+  const systemAudioCapture = useSystemAudioCapture({
+    enabled: isRunning,
+    paused: isPaused,
+    onError: handleSystemError,
+    onAudioLevel: handleSystemAudioLevel,
+    onReady: handleSystemReady,
   });
 
   useEffect(() => {
@@ -163,6 +194,20 @@ function App() {
     }
     return () => clearInterval(interval);
   }, [isRunning, isPaused, isStarting]);
+
+  // Check electron-audio-loopback availability on mount
+  useEffect(() => {
+    if (window.cluely?.audio?.enableLoopbackAudio) {
+      console.log('[App] electron-audio-loopback IPC methods are available');
+    } else {
+      console.warn('[App] electron-audio-loopback is NOT available - system audio capture will not work');
+      console.warn('[App] This may be due to:');
+      console.warn('[App] 1. Package not installed (npm install electron-audio-loopback)');
+      console.warn('[App] 2. initMain() not called in main process');
+      console.warn('[App] 3. IPC methods not exposed in preload script');
+      console.warn('[App] 4. Screen recording permission not granted (macOS)');
+    }
+  }, []);
 
   // Start session on mount
 
@@ -186,7 +231,13 @@ function App() {
     });
 
     const unsubAudioLevels = window.cluely.on?.audioLevelsUpdate?.((levels) => {
-      setAudioLevels(levels);
+      setAudioLevels((prev) => ({
+        ...prev,
+        system: levels.system,
+        mixed: levels.mixed,
+        // Microphone level is updated by useMicrophoneCapture hook,
+        // so we only update system and mixed from main process
+      }));
     });
 
     const unsubSuggestion = window.cluely.on.suggestion((suggestion) => {
@@ -338,11 +389,18 @@ function App() {
         console.log("[App] Starting session...");
         setIsStarting(true);
         
-        // CRITICAL: Start microphone capture IMMEDIATELY on user interaction
+        // CRITICAL: Start microphone and system audio capture IMMEDIATELY on user interaction
         // This ensures AudioContext is unlocked with user gesture (required by browser autoplay policy)
-        console.log("[App] Enabling microphone capture immediately (user interaction)...");
-        setIsRunning(true); // Enable mic hook immediately to unlock AudioContext
+        console.log("[App] Enabling microphone and system audio capture immediately (user interaction)...");
+        setIsRunning(true); // Enable hooks immediately to unlock AudioContext
         setIsPaused(false);
+        
+        // Start system audio capture immediately on user interaction
+        // Pass force=true to bypass enabled check since we're calling it explicitly
+        console.log("[App] Attempting to start system audio capture...");
+        systemAudioCapture.start(true).catch((error) => {
+          console.error("[App] Failed to start system audio capture:", error);
+        });
         
         const sessionStartTime = performance.now();
         const result = await window.cluely.session.start();
@@ -367,11 +425,11 @@ function App() {
     } else if (isPaused) {
       await window.cluely.session.togglePause();
       setIsPaused(false);
-    } else {
-      await window.cluely.session.togglePause();
-      setIsPaused(true);
-    }
-  }, [isRunning, isPaused]);
+      } else {
+        await window.cluely.session.togglePause();
+        setIsPaused(true);
+      }
+  }, [isRunning, isPaused, systemAudioCapture]);
 
 
   const handleToggleVisibility = useCallback(() => {

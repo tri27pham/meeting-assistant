@@ -52,6 +52,11 @@ const audioConfig = {
     systemVolume: 1.0,
     microphoneVolume: 1.0,
   },
+
+  transcriptMerge: {
+    bufferWindowMs: 2000, // 2 second buffer for out-of-order handling
+    flushIntervalMs: 100, // Check every 100ms for transcripts ready to emit
+  },
 };
 
 function validateConfig() {

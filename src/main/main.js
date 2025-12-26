@@ -30,14 +30,32 @@ try {
 
 const AudioCaptureService = require("./services/AudioCaptureService");
 const DeepgramService = require("./services/DeepgramService");
+const TranscriptMergeService = require("./services/TranscriptMergeService");
 const PermissionService = require("./services/PermissionService");
 const ContextService = require("./services/ContextService");
 const AIOrchestrationService = require("./services/AIOrchestrationService");
 
+// Initialize electron-audio-loopback in main process (must be before app.whenReady)
+let electronAudioLoopback = null;
+try {
+  electronAudioLoopback = require('electron-audio-loopback');
+  if (typeof electronAudioLoopback.initMain === 'function') {
+    electronAudioLoopback.initMain();
+    console.log('[Main] electron-audio-loopback initialized');
+    console.log('[Main] IPC handlers for enable-loopback-audio and disable-loopback-audio should be set up by initMain()');
+  } else {
+    console.warn('[Main] electron-audio-loopback.initMain not found');
+  }
+} catch (error) {
+  console.warn('[Main] electron-audio-loopback not available:', error.message);
+}
+
 let overlayWindow = null;
 
 const audioCaptureService = new AudioCaptureService();
-const deepgramService = new DeepgramService();
+const deepgramMicService = new DeepgramService('microphone');
+const deepgramSystemService = new DeepgramService('system');
+const transcriptMergeService = new TranscriptMergeService();
 const permissionService = new PermissionService();
 const contextService = new ContextService();
 console.log('[Main] ContextService initialized');
@@ -174,124 +192,231 @@ function registerHotkeys() {
 }
 
 function setupAudioPipeline() {
-  let firstChunkSent = false;
-  let chunkCount = 0;
-  audioCaptureService.on("audioChunk", (chunk) => {
-    chunkCount++;
+  // Start transcript merge service flush timer
+  transcriptMergeService.startFlushTimer();
+
+  // Track first chunks for each stream
+  let firstMicChunkSent = false;
+  let firstSystemChunkSent = false;
+  let micChunkCount = 0;
+  let systemChunkCount = 0;
+
+  // Handle microphone audio chunks
+  audioCaptureService.on("microphoneAudioChunk", (chunk) => {
+    micChunkCount++;
     
     // Only send audio to Deepgram when actively recording (not stopped or paused)
     if (!audioCaptureService.isCapturing || audioCaptureService.isPaused) {
-      // Silently ignore chunks when not recording or paused
       return;
     }
     
-    if (deepgramService.isConnected) {
-      if (!firstChunkSent) {
-        console.log("[Main] First audio chunk being sent to Deepgram");
-        firstChunkSent = true;
+    if (deepgramMicService.isConnected) {
+      if (!firstMicChunkSent) {
+        console.log("[Main] First microphone audio chunk being sent to Deepgram");
+        firstMicChunkSent = true;
       }
       // Log every 100 chunks to track if audio is still flowing
-      if (chunkCount % 100 === 0) {
-        console.log(`[Main] Sent ${chunkCount} audio chunks to Deepgram, connection state:`, {
-          isConnected: deepgramService.isConnected,
-          isStreaming: deepgramService.isStreaming,
+      if (micChunkCount % 100 === 0) {
+        console.log(`[Main] Sent ${micChunkCount} microphone chunks to Deepgram, connection state:`, {
+          isConnected: deepgramMicService.isConnected,
+          isStreaming: deepgramMicService.isStreaming,
           isCapturing: audioCaptureService.isCapturing,
           isPaused: audioCaptureService.isPaused
         });
       }
-      deepgramService.streamAudio(chunk);
+      deepgramMicService.streamAudio(chunk);
     } else {
-      console.warn("[Main] Audio chunk received but Deepgram is not connected", {
-        chunkCount,
-        isConnected: deepgramService.isConnected,
+      console.warn("[Main] Microphone chunk received but Deepgram mic service is not connected", {
+        chunkCount: micChunkCount,
+        isConnected: deepgramMicService.isConnected,
         isCapturing: audioCaptureService.isCapturing,
         isPaused: audioCaptureService.isPaused
       });
     }
   });
 
-  // Listen for both partial and final transcript events
-  deepgramService.on("transcript:partial", (transcriptData) => {
-    if (overlayWindow) {
-      overlayWindow.webContents.send("transcript:update", {
-        text: transcriptData.text,
-        isFinal: false,
-        confidence: transcriptData.confidence,
-        timestamp: transcriptData.timestamp,
+  // Handle system audio chunks
+  audioCaptureService.on("systemAudioChunk", (chunk) => {
+    systemChunkCount++;
+    
+    // Only send audio to Deepgram when actively recording (not stopped or paused)
+    if (!audioCaptureService.isCapturing || audioCaptureService.isPaused) {
+      return;
+    }
+    
+    if (deepgramSystemService.isConnected) {
+      if (!firstSystemChunkSent) {
+        console.log("[Main] First system audio chunk being sent to Deepgram");
+        firstSystemChunkSent = true;
+      }
+      // Log every 100 chunks to track if audio is still flowing
+      if (systemChunkCount % 100 === 0) {
+        console.log(`[Main] Sent ${systemChunkCount} system audio chunks to Deepgram, connection state:`, {
+          isConnected: deepgramSystemService.isConnected,
+          isStreaming: deepgramSystemService.isStreaming,
+          isCapturing: audioCaptureService.isCapturing,
+          isPaused: audioCaptureService.isPaused
+        });
+      }
+      deepgramSystemService.streamAudio(chunk);
+    } else {
+      console.warn("[Main] System audio chunk received but Deepgram system service is not connected", {
+        chunkCount: systemChunkCount,
+        isConnected: deepgramSystemService.isConnected,
+        isCapturing: audioCaptureService.isCapturing,
+        isPaused: audioCaptureService.isPaused
       });
     }
   });
 
-  deepgramService.on("transcript:final", (transcriptData) => {
-    console.log('[Main] Received transcript:final', { 
+  // Track stream start times for timestamp calculation
+  deepgramMicService.on("connected", ({ streamStartTime }) => {
+    transcriptMergeService.setStreamStartTime('microphone', streamStartTime);
+  });
+
+  deepgramSystemService.on("connected", ({ streamStartTime }) => {
+    transcriptMergeService.setStreamStartTime('system', streamStartTime);
+  });
+
+  // Route transcripts from microphone Deepgram service to merge service
+  deepgramMicService.on("transcript:final", (transcriptData) => {
+    console.log('[Main] Received microphone transcript:final', { 
       text: transcriptData.text?.substring(0, 50),
       hasText: !!transcriptData.text,
-      timestamp: transcriptData.timestamp 
+      timestamp: transcriptData.timestamp,
+      source: transcriptData.source
+    });
+    
+    transcriptMergeService.addTranscript('microphone', transcriptData, transcriptData.streamStartTime);
+  });
+
+  // Route transcripts from system Deepgram service to merge service
+  deepgramSystemService.on("transcript:final", (transcriptData) => {
+    console.log('[Main] Received system transcript:final', { 
+      text: transcriptData.text?.substring(0, 50),
+      hasText: !!transcriptData.text,
+      timestamp: transcriptData.timestamp,
+      source: transcriptData.source
+    });
+    
+    transcriptMergeService.addTranscript('system', transcriptData, transcriptData.streamStartTime);
+  });
+
+  // Handle merged, chronologically ordered transcripts
+  transcriptMergeService.on("transcript:merged", (mergedData) => {
+    console.log('[Main] Received merged transcript (chronologically ordered)', {
+      source: mergedData.source,
+      text: mergedData.text?.substring(0, 50),
+      absoluteTimestamp: new Date(mergedData.absoluteTimestamp).toISOString(),
+      hasText: !!mergedData.text
     });
     
     // Forward to ContextService for context management
-    contextService.addSegment(transcriptData);
+    contextService.addSegment(mergedData);
 
-    // Keep existing transcript forwarding to renderer (for UI display)
+    // Forward to renderer for UI display
     if (overlayWindow) {
       overlayWindow.webContents.send("transcript:update", {
-        text: transcriptData.text,
-        isFinal: true,
-        confidence: transcriptData.confidence,
-        timestamp: transcriptData.timestamp,
+        text: mergedData.text,
+        isFinal: mergedData.isFinal !== false, // Default to true if not specified
+        confidence: mergedData.confidence,
+        timestamp: mergedData.absoluteTimestamp, // Use absolute timestamp
+        source: mergedData.source, // Include source for UI
       });
     }
   });
 
-  let isReconnecting = false;
-  let reconnectAttempts = 0;
+  // Reconnection handling for both Deepgram services
+  let isReconnectingMic = false;
+  let isReconnectingSystem = false;
+  let reconnectAttemptsMic = 0;
+  let reconnectAttemptsSystem = 0;
   const maxReconnectAttempts = 5;
   
-  const attemptReconnect = async () => {
+  const attemptReconnectMic = async () => {
     if (!audioCaptureService.isCapturing) {
-      console.log("[Main] Audio capture not active - not reconnecting");
+      console.log("[Main] Audio capture not active - not reconnecting mic");
       return;
     }
     
-    if (isReconnecting) {
-      console.log("[Main] Reconnection already in progress");
+    if (isReconnectingMic) {
+      console.log("[Main] Mic reconnection already in progress");
       return;
     }
     
-    if (reconnectAttempts >= maxReconnectAttempts) {
-      console.error("[Main] Max reconnection attempts reached, giving up");
-      reconnectAttempts = 0;
+    if (reconnectAttemptsMic >= maxReconnectAttempts) {
+      console.error("[Main] Max mic reconnection attempts reached, giving up");
+      reconnectAttemptsMic = 0;
       return;
     }
     
-      isReconnecting = true;
-    reconnectAttempts++;
+    isReconnectingMic = true;
+    reconnectAttemptsMic++;
     
-    // Exponential backoff: 1s, 2s, 4s, 8s, 16s
-    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 16000);
-    console.log(`[Main] Attempting to reconnect to Deepgram (attempt ${reconnectAttempts}/${maxReconnectAttempts}) in ${delay}ms...`);
+    const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsMic - 1), 16000);
+    console.log(`[Main] Attempting to reconnect mic Deepgram (attempt ${reconnectAttemptsMic}/${maxReconnectAttempts}) in ${delay}ms...`);
     
-      setTimeout(async () => {
-        try {
-        // Ensure we disconnect any stale connection first
-        if (deepgramService.isConnected) {
-          await deepgramService.disconnect();
+    setTimeout(async () => {
+      try {
+        if (deepgramMicService.isConnected) {
+          await deepgramMicService.disconnect();
         }
-        
-          await deepgramService.connect();
-        console.log("[Main] Successfully reconnected to Deepgram");
-        reconnectAttempts = 0; // Reset on success
-          isReconnecting = false;
-        } catch (error) {
-        console.error(`[Main] Failed to reconnect to Deepgram (attempt ${reconnectAttempts}):`, error);
-          isReconnecting = false;
-        // Will retry on next error/close event
+        await deepgramMicService.connect();
+        console.log("[Main] Successfully reconnected mic Deepgram");
+        reconnectAttemptsMic = 0;
+        isReconnectingMic = false;
+      } catch (error) {
+        console.error(`[Main] Failed to reconnect mic Deepgram (attempt ${reconnectAttemptsMic}):`, error);
+        isReconnectingMic = false;
+      }
+    }, delay);
+  };
+
+  const attemptReconnectSystem = async () => {
+    if (!audioCaptureService.isCapturing) {
+      console.log("[Main] Audio capture not active - not reconnecting system");
+      return;
+    }
+    
+    if (isReconnectingSystem) {
+      console.log("[Main] System reconnection already in progress");
+      return;
+    }
+    
+    if (reconnectAttemptsSystem >= maxReconnectAttempts) {
+      console.error("[Main] Max system reconnection attempts reached, giving up");
+      reconnectAttemptsSystem = 0;
+      return;
+    }
+    
+    isReconnectingSystem = true;
+    reconnectAttemptsSystem++;
+    
+    const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsSystem - 1), 16000);
+    console.log(`[Main] Attempting to reconnect system Deepgram (attempt ${reconnectAttemptsSystem}/${maxReconnectAttempts}) in ${delay}ms...`);
+    
+    setTimeout(async () => {
+      try {
+        if (deepgramSystemService.isConnected) {
+          await deepgramSystemService.disconnect();
+        }
+        await deepgramSystemService.connect();
+        console.log("[Main] Successfully reconnected system Deepgram");
+        reconnectAttemptsSystem = 0;
+        isReconnectingSystem = false;
+      } catch (error) {
+        console.error(`[Main] Failed to reconnect system Deepgram (attempt ${reconnectAttemptsSystem}):`, error);
+        isReconnectingSystem = false;
       }
     }, delay);
   };
   
-  deepgramService.on("closed", () => {
-    attemptReconnect();
+  deepgramMicService.on("closed", () => {
+    attemptReconnectMic();
+  });
+
+  deepgramSystemService.on("closed", () => {
+    attemptReconnectSystem();
   });
 
   audioCaptureService.on("started", () => {
@@ -344,11 +469,17 @@ function setupAudioPipeline() {
     }
   });
 
-  deepgramService.on("error", (error) => {
-    console.error("[Main] Deepgram error:", error);
-    // Attempt to reconnect on error (connection might be broken)
+  deepgramMicService.on("error", (error) => {
+    console.error("[Main] Deepgram mic service error:", error);
     if (audioCaptureService.isCapturing) {
-      attemptReconnect();
+      attemptReconnectMic();
+    }
+  });
+
+  deepgramSystemService.on("error", (error) => {
+    console.error("[Main] Deepgram system service error:", error);
+    if (audioCaptureService.isCapturing) {
+      attemptReconnectSystem();
     }
   });
 
@@ -419,27 +550,37 @@ function setupIPC() {
         console.log(`[Main] Permission check took ${(permEndTime - permStartTime)}ms`);
       }
 
-      if (!deepgramService.isReady()) {
+      if (!deepgramMicService.isReady() || !deepgramSystemService.isReady()) {
         return {
           success: false,
           error: "Deepgram API key not configured",
         };
       }
 
+      // Connect both Deepgram services
       let deepgramStartTime, deepgramEndTime;
       try {
         deepgramStartTime = performance.now();
       } catch (e) {
         deepgramStartTime = Date.now();
       }
-      await deepgramService.connect();
+      
+      // Connect microphone Deepgram service
+      await deepgramMicService.connect();
+      
+      // Connect system Deepgram service
+      await deepgramSystemService.connect();
+      
       try {
         deepgramEndTime = performance.now();
-        console.log(`[Main] Deepgram connection took ${(deepgramEndTime - deepgramStartTime).toFixed(2)}ms`);
+        console.log(`[Main] Both Deepgram connections took ${(deepgramEndTime - deepgramStartTime).toFixed(2)}ms`);
       } catch (e) {
         deepgramEndTime = Date.now();
-        console.log(`[Main] Deepgram connection took ${(deepgramEndTime - deepgramStartTime)}ms`);
+        console.log(`[Main] Both Deepgram connections took ${(deepgramEndTime - deepgramStartTime)}ms`);
       }
+
+      // Clear transcript merge service state for new session
+      transcriptMergeService.clear();
 
       let audioStartTime, audioEndTime;
       try {
@@ -477,7 +618,9 @@ function setupIPC() {
   ipcMain.handle("session:stop", async () => {
     try {
       await audioCaptureService.stop();
-      await deepgramService.disconnect();
+      await deepgramMicService.disconnect();
+      await deepgramSystemService.disconnect();
+      transcriptMergeService.clear();
       contextService.clear(); // Clear context on session stop
 
       return { success: true };
@@ -630,6 +773,36 @@ function setupIPC() {
     
     audioCaptureService.onMicrophoneData(chunkData);
   });
+
+  // Track system audio chunks
+  let firstSystemChunkTime = null;
+  let systemChunkCount = 0;
+  
+  ipcMain.on("audio:system-chunk", (event, chunkData) => {
+    systemChunkCount++;
+    
+    // Track first chunk timing
+    if (!firstSystemChunkTime) {
+      firstSystemChunkTime = Date.now();
+      const timeSinceSessionStart = sessionStartTime ? firstSystemChunkTime - sessionStartTime : 'unknown';
+      console.log(`[Main] 🔊 FIRST SYSTEM AUDIO CHUNK RECEIVED!`, {
+        timeSinceSessionStart: sessionStartTime ? `${timeSinceSessionStart}ms` : 'unknown',
+        timestamp: chunkData.timestamp,
+        sampleRate: chunkData.sampleRate,
+        dataLength: chunkData.data?.length,
+        chunkTimestamp: new Date(chunkData.timestamp).toISOString()
+      });
+    }
+    
+    // Log every 100 chunks to track flow
+    if (systemChunkCount % 100 === 0) {
+      const timeSinceFirst = Date.now() - (firstSystemChunkTime || Date.now());
+      console.log(`[Main] System audio chunks received: ${systemChunkCount} (${timeSinceFirst}ms since first)`);
+    }
+    
+    audioCaptureService.onSystemAudioData(chunkData);
+  });
+
 }
 
 app.whenReady().then(() => {

@@ -18,10 +18,21 @@ class ContextService extends EventEmitter {
 
   addSegment(segment) {
     try {
-      console.log('[ContextService] addSegment called:', { text: segment.text?.substring(0, 50), timestamp: segment.timestamp });
+      // Use absoluteTimestamp if available (from merged transcripts), otherwise use timestamp
+      const effectiveTimestamp = segment.absoluteTimestamp || segment.timestamp || Date.now();
+      const segmentWithTimestamp = {
+        ...segment,
+        timestamp: effectiveTimestamp,
+      };
+      
+      console.log('[ContextService] addSegment called:', { 
+        text: segment.text?.substring(0, 50), 
+        timestamp: effectiveTimestamp,
+        source: segment.source || 'unknown'
+      });
       
       // Add to recent verbatim buffer
-      this.recentVerbatim.push(segment);
+      this.recentVerbatim.push(segmentWithTimestamp);
       console.log('[ContextService] Recent verbatim count:', this.recentVerbatim.length);
 
       // If recent buffer exceeds limit, oldest goes to summarization queue

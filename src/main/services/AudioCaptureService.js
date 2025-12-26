@@ -11,6 +11,7 @@ class AudioCaptureService extends EventEmitter {
 
     this.systemAudioStream = null;
     this.systemAudioBuffer = [];
+    this.lastSystemAudioTimestamp = 0;
 
     this.microphoneBuffer = [];
     this.lastMicrophoneTimestamp = 0;
@@ -155,27 +156,68 @@ class AudioCaptureService extends EventEmitter {
 
       this._calculateMicrophoneLevel(float32Data);
 
-      this._processBuffers();
+      this._processMicrophoneBuffers();
     } catch (error) {
       console.error('[AudioCaptureService] Error processing microphone data:', error);
       this.emit('error', error);
     }
   }
 
+  /**
+   * Handle system audio chunk from renderer process
+   * @param {Object} chunkData - Audio chunk data from IPC
+   * @param {Array} chunkData.data - Audio samples (Float32Array converted to array)
+   * @param {number} chunkData.sampleRate - Sample rate (typically 48000)
+   * @param {number} chunkData.channels - Channel count (1 or 2)
+   * @param {string} chunkData.bitDepth - Bit depth ('float32')
+   * @param {number} chunkData.timestamp - Timestamp
+   */
+  onSystemAudioData(chunkData) {
+    if (!this.isCapturing || this.isPaused) return;
+
+    try {
+      const float32Data = new Float32Array(chunkData.data);
+      
+      // Debug: Log first chunk processing
+      if (this.systemAudioBuffer.length === 0) {
+        console.log('[AudioCaptureService] Processing first system audio chunk:', {
+          dataLength: float32Data.length,
+          sampleRate: chunkData.sampleRate,
+          timestamp: chunkData.timestamp,
+          isCapturing: this.isCapturing,
+          isPaused: this.isPaused
+        });
+      }
+
+      this._calculateSystemLevel(float32Data);
+
+      this.systemAudioBuffer.push({
+        data: float32Data,
+        format: {
+          sampleRate: chunkData.sampleRate || 48000,
+          channels: chunkData.channels || 1,
+          bitDepth: chunkData.bitDepth || 'float32',
+        },
+        timestamp: chunkData.timestamp || Date.now(),
+      });
+
+      this.lastSystemAudioTimestamp = chunkData.timestamp || Date.now();
+
+      this._processSystemAudioBuffers();
+    } catch (error) {
+      console.error('[AudioCaptureService] Error processing system audio data:', error);
+      this.emit('error', error);
+    }
+  }
+
   async _startSystemAudio() {
     try {
-      // Note: electron-audio-loopback provides MediaStream in renderer
-      // For main process, we may need to use a different approach
-      // For now, we'll set up the structure and handle it via IPC if needed
-      // or use a native module like audioteejs if electron-audio-loopback doesn't work in main
-      
-      // TODO: Implement system audio capture
-      // This might require:
-      // 1. Using electron-audio-loopback in renderer and sending via IPC
-      // 2. Using a native module like audioteejs in main process
-      // 3. Using Electron's desktopCapturer API
-      
-      this.systemAudioStream = true; // Placeholder
+      // System audio capture happens in renderer process via electron-audio-loopback
+      // We just mark it as active here - actual capture is handled via IPC
+      this.systemAudioStream = true;
+      this.systemAudioBuffer = [];
+      this.lastSystemAudioTimestamp = 0;
+      console.log('[AudioCaptureService] System audio capture marked as active (capture happens in renderer)');
     } catch (error) {
       console.error('[AudioCaptureService] Error starting system audio:', error);
       throw error;
@@ -194,7 +236,7 @@ class AudioCaptureService extends EventEmitter {
     }
   }
 
-  _processBuffers() {
+  _processMicrophoneBuffers() {
     if (this.isPaused) return;
 
     if (this.microphoneBuffer.length === 0) return;
@@ -213,10 +255,37 @@ class AudioCaptureService extends EventEmitter {
 
       this._calculateMixedLevel(converted);
 
-      this.emit('audioChunk', {
+      this.emit('microphoneAudioChunk', {
         data: converted,
         format: this.converter.getTargetFormat(),
         timestamp: micChunk.timestamp,
+      });
+    }
+  }
+
+  _processSystemAudioBuffers() {
+    if (this.isPaused) return;
+
+    if (this.systemAudioBuffer.length === 0) return;
+
+    while (this.systemAudioBuffer.length > 0) {
+      const systemChunk = this.systemAudioBuffer.shift();
+
+      const converted = this.converter.convert(systemChunk.data, systemChunk.format);
+
+      if (this.systemVolume !== 1.0) {
+        for (let i = 0; i < converted.length; i++) {
+          converted[i] = Math.round(converted[i] * this.systemVolume);
+          converted[i] = Math.max(-32768, Math.min(32767, converted[i]));
+        }
+      }
+
+      this._calculateSystemLevelFromInt16(converted);
+
+      this.emit('systemAudioChunk', {
+        data: converted,
+        format: this.converter.getTargetFormat(),
+        timestamp: systemChunk.timestamp,
       });
     }
   }
@@ -241,12 +310,30 @@ class AudioCaptureService extends EventEmitter {
   }
 
   /**
-   * Calculate system audio level (placeholder for when system audio is implemented)
+   * Calculate system audio level from Float32Array
    * @private
    */
-  _calculateSystemLevel() {
-    // TODO: Implement when system audio capture is working
-    this.audioLevels.system = 0;
+  _calculateSystemLevel(float32Data) {
+    let sum = 0;
+    for (let i = 0; i < float32Data.length; i++) {
+      sum += float32Data[i] * float32Data[i];
+    }
+    const rms = Math.sqrt(sum / float32Data.length);
+    this.audioLevels.system = Math.min(1, rms * 2);
+  }
+
+  /**
+   * Calculate system audio level from Int16Array (after conversion)
+   * @private
+   */
+  _calculateSystemLevelFromInt16(int16Data) {
+    let sum = 0;
+    for (let i = 0; i < int16Data.length; i++) {
+      const normalized = int16Data[i] / 32768; // Normalize to -1 to 1
+      sum += normalized * normalized;
+    }
+    const rms = Math.sqrt(sum / int16Data.length);
+    this.audioLevels.system = Math.min(1, rms * 1.5); // Normalize and boost
   }
 
   /**

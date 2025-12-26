@@ -1,5 +1,9 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
+// Note: electron-audio-loopback uses IPC for manual mode
+// The IPC handlers are set up by initMain() in main.js
+// We expose the IPC methods via window.cluely.audio above
+
 /**
  * Preload script - Exposes a safe API to the renderer process
  * Following architecture: UI must not know how audio/STT/LLM works
@@ -32,6 +36,12 @@ contextBridge.exposeInMainWorld("cluely", {
     sendMicrophoneChunk: (audioData) => {
       ipcRenderer.send("audio:microphone-chunk", audioData);
     },
+    sendSystemChunk: (audioData) => {
+      ipcRenderer.send("audio:system-chunk", audioData);
+    },
+    // electron-audio-loopback IPC methods
+    enableLoopbackAudio: () => ipcRenderer.invoke("enable-loopback-audio"),
+    disableLoopbackAudio: () => ipcRenderer.invoke("disable-loopback-audio"),
   },
 
   // Console log forwarding (for debugging)
@@ -109,3 +119,6 @@ contextBridge.exposeInMainWorld("cluely", {
     },
   },
 });
+
+// electron-audio-loopback is accessed via window.cluely.audio.enableLoopbackAudio()
+// and navigator.mediaDevices.getDisplayMedia() in the renderer
